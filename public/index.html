@@ -39,12 +39,12 @@ body{height:100%;margin:0;background:var(--bg);color:var(--parch);font-family:va
 #cv{display:block;touch-action:none}
 
 .acts{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
-.skpad{position:absolute;right:8px;bottom:8px;width:206px;height:224px;z-index:3;pointer-events:none}
+.skpad{position:absolute;right:8px;bottom:8px;width:210px;height:224px;z-index:3;pointer-events:none}
 .skpad .btn{position:absolute;pointer-events:auto;width:56px;height:56px;border-radius:50%;padding:0 3px;background:rgba(27,31,25,.8);font-size:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;line-height:1.1}
 .skpad .btn small{font-size:8px;margin-top:1px}
 #bAtk{right:0;bottom:0;width:80px!important;height:80px!important;font-size:15px!important;border-color:#c49a3a!important;background:rgba(74,48,18,.82)!important}
 .skpad .btn.sk{position:absolute}
-#bS0{right:88px;bottom:2px}#bS1{right:74px;bottom:70px}#bS2{right:10px;bottom:90px}#bPot{right:10px;bottom:158px}
+#bS0{right:88px;bottom:2px}#bS3{right:150px;bottom:2px}#bS4{right:138px;bottom:70px}#bS1{right:74px;bottom:70px}#bS2{right:10px;bottom:90px}#bPot{right:10px;bottom:158px}
 .fbtn{position:absolute;right:8px;bottom:240px;z-index:3;padding:5px 8px;font-size:11px;background:rgba(27,31,25,.8)}
 #log{position:absolute;left:6px;bottom:6px;width:min(52%,440px);max-height:100px;overflow:hidden;pointer-events:none;z-index:2;font-size:12px;line-height:16px;padding:4px 6px;
   background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.5) 30%);text-shadow:0 1px 1px #000}
@@ -205,6 +205,8 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
       <button class="btn sk" id="bS2"><i class="uic ski"></i><span class="sn">技能</span><small></small><i class="cdv"></i></button>
       <button class="btn sk" id="bS1"><i class="uic ski"></i><span class="sn">技能</span><small></small><i class="cdv"></i></button>
       <button class="btn sk" id="bS0"><i class="uic ski"></i><span class="sn">技能</span><small></small><i class="cdv"></i></button>
+      <button class="btn sk" id="bS3" hidden><i class="uic ski"></i><span class="sn">技能</span><small></small><i class="cdv"></i></button>
+      <button class="btn sk" id="bS4" hidden><i class="uic ski"></i><span class="sn">技能</span><small></small><i class="cdv"></i></button>
       <button class="btn" id="bAtk"><i class="uic" style="--i:12"></i><span>攻擊</span></button>
     </div>
     <button class="btn fbtn" id="bZoom" aria-label="畫面縮放">100%</button>

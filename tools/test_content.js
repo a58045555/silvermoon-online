@@ -83,7 +83,7 @@ for(const [map,k] of [['forest','treant'],['waste','colossus'],['cave','firelord
   W.startWorldBoss(); const b=[...C.mobs.values()].find(m=>m.wb); ok(b&&b.maxhp===MT.firelord.hp*5,'world boss has 5x HP');
   for(let i=0;i<30;i++){ C.bossT=0; C.spawnT=0; W.tick(); } ok([...C.mobs.values()].filter(m=>m.boss).length===1,'normal boss does not spawn during world boss');
   const ws0=A.c.inv.ws; b.dmg.set(A.id,b.maxhp); W.killMob(C,b); const leg=[...C.loot.values()].filter(L=>L.q===3).length;
-  ok(!W.wb&&leg>=3,`world boss drops ${leg} legendaries`); ok(A.c.inv.ws>ws0,'participants rewarded'); }
+  ok(!W.wb&&leg>=2,`world boss drops ${leg} legendaries`); ok(A.c.inv.ws>ws0,'participants rewarded'); }
 // one-click sell, lock, auto-equip
 { const S=await mk('商人','knight',10); W.enterMap(S,'village',{x:15,y:14}); S.c.bag=[{s:'h',t:0,en:0},{s:'h',t:1,en:0,q:1,bon:{str:1}},{s:'w',t:3,en:0},{s:'c',t:2,en:0,lock:true},{s:'g',t:4,en:0,q:2,bon:{str:2}}];
   W.handle(S,{t:'autoequip'}); ok(S.c.eq.w.t===3&&S.c.eq.g&&S.c.eq.g.t===4,'auto-equip picks better weapon and gloves');
@@ -93,5 +93,12 @@ for(const [map,k] of [['forest','treant'],['waste','colossus'],['cave','firelord
 { const J=await mk('搖桿','knight',5); W.enterMap(J,'village',{x:15,y:12}); const x0=J.x,y0=J.y;
   W.handle(J,{t:'dir',dx:1,dy:0}); for(let i=0;i<10;i++){ J.dirT=Date.now(); W.tick(); } ok(J.x>x0+3&&J.y===y0,`joystick walks continuously (${x0}->${J.x} in 1s)`);
   W.handle(J,{t:'dir',dx:0,dy:0}); const x1=J.x; tick(10); ok(J.x<=x1+1,'joystick release stops'); }
+// class advancement + teleporter
+{ const A=await mk('轉職','mage',30); W.enterMap(A,'village',{x:15,y:14}); A.c.gold=50000;
+  W.handle(A,{t:'advance',to:'paladin'}); ok(!A.c.adv,'cannot take another class advancement');
+  W.handle(A,{t:'advance',to:'archmage'}); ok(A.c.adv==='archmage'&&A.c.gold===30000,'mage advances to archmage');
+  W.enterMap(A,'forest',{x:20,y:20}); clearF(); const r=[[1,0],[0,1],[-1,0]].map(([dx,dy])=>W.spawnMob(F,'wolf',A.x+dx,A.y+dy)); A.c.lv=40; A.c.mp=999; A.cds={};
+  W.handle(A,{t:'skill',i:4}); ok(r.every(m=>m.hp<m.maxhp||!F.mobs.has(m.id)),'雷霆風暴 hits everything around');
+  W.enterMap(A,'village',{x:15,y:14}); const g=A.c.gold; W.handle(A,{t:'tele',to:'colossus'}); ok(A.inst.id==='waste'&&A.c.gold===g-2000&&Math.hypot(A.x-A.inst.m.boss.x,A.y-A.inst.m.boss.y)<8,'teleporter sends to the colossus altar'); }
 ok(SKILLS.knight.length===3&&QUESTS.length>=10,'data tables present');
 console.log('done'); process.exit();

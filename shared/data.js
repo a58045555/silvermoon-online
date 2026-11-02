@@ -100,7 +100,7 @@ function buildVillage(){ const m=newMap('village'),W=m.W,H=m.H,R=rng(3),ri=(a,b)
   put(m,'barrel',7,4);put(m,'barrel',7,5);put(m,'crate',21,4);put(m,'crate',21,5);put(m,'barrel',25,15);
   for(const [a,b,v] of [[10,3,0],[18,2,2],[26,11,1],[9,15,0],[26,19,2],[3,19,1],[19,11,2],[9,19,1],[21,19,0]])put(m,'tree',a,b,v);
   const npc=(k,x,y,name,act)=>{m.npcs.push({k,x,y,name,act});m.blk[y*W+x]=1;};
-  npc('smith',6,6,'鐵匠 巴爾克','smith');npc('merchant',22,6,'雜貨商 莉娜','shop');npc('guard',13,18,'守衛 艾德','guard');
+  npc('smith',6,6,'鐵匠 巴爾克','smith');npc('merchant',22,6,'雜貨商 莉娜','shop');npc('guard',13,18,'守衛 艾德','guard');npc('tele',17,17,'傳送師 露娜','tele');
   // town wall along the south edge with a gatehouse over the road (x 14-15)
   m.wall={y:H-1,x0:2,x1:W-3,g0:13,g1:16};
   for(let x=2;x<=W-3;x++) if(x<14||x>15) m.blk[(H-1)*W+x]=1;
@@ -175,6 +175,7 @@ export function itemBase(it){ const o={}; if(!it)return o; const t=it.t|0,en=it.
 export function gearSum(eq){ const o={}; for(const [sl] of SLOTS){const b=itemBase(eq&&eq[sl]);for(const k in b)o[k]=(o[k]||0)+b[k];} return o; }
 // c = character record {cls, lv, sp, eq}
 export function calcStats(c){ const C=CLS[c.cls], G=gearSum(c.eq), sp=c.sp||{};
+  if(c.adv&&ADV[c.adv]) for(const [k,v] of Object.entries(ADV[c.adv].bon)) G[k]=(G[k]||0)+v;
   const st=k=>C.base[k]+(sp[k]||0)+(G[k]||0);
   const s={str:st('str'),dex:st('dex'),con:st('con'),int:st('int'),wis:st('wis'),gear:G};
   const main=c.cls==='knight'?s.str:c.cls==='ranger'?s.dex:c.cls==='mage'?s.int:(s.str+s.dex)/2;
@@ -200,7 +201,7 @@ export function itemScore(it,cls){ if(!it) return 0; const b=itemBase(it),M=MAIN
 export function eqSlotFor(eq,it){ if(it.s==='r')return!eq.r1?'r1':!eq.r2?'r2':'r1'; return it.s; }
 export function makeItem(s,t,R=Math.random){ const ri=(a,b)=>a+Math.floor(R()*(b-a+1)),pick=a=>a[Math.floor(R()*a.length)];
   t=Math.max(0,Math.min(4,t)); const it={s,t,en:0}; if(s==='r')it.t=ri(0,3);
-  const r=R(),q=r<.07?2:r<.35?1:0;
+  const r=R(),q=r<.04?2:r<.26?1:0;
   if(q){it.q=q;it.bon={};const pool=['str','dex','con','int','wis','hp','mp','atk','def'];const n=q===2?ri(2,3):1;
     for(let i=0;i<n;i++){const k=pick(pool);const v=k==='hp'?ri(8,20)*(t+1):k==='mp'?ri(4,10)*(t+1):k==='atk'?ri(1,2)*(t+1):k==='def'?ri(1,t+1):ri(1,2)+(t>>1);it.bon[k]=(it.bon[k]||0)+v;}}
   if(s!=='r'&&s!=='n'&&R()<.1)it.en=ri(1,2);
@@ -239,23 +240,23 @@ export function makeLegend(kind){
 export const QUESTS = [
   {n:'序章：月碎之夜', d:'找村南的守衛艾德說話', type:'talk', r:{exp:20,gold:100,pot:5},
    story:'酒館裡的老故事說，很久以前天上有兩顆月亮。最近哭泣森林在夜裡傳出哭聲，守衛艾德想找冒險者幫忙。'},
-  {n:'第一章：晨霧村的旅人', d:'到哭泣森林打倒 10 隻苔蘚史萊姆。', type:'kill', k:['slime'], n:10, r:{exp:80,gold:200,ret:2},
+  {n:'第一章：晨霧村的旅人', d:'到哭泣森林打倒 10 隻苔蘚史萊姆。', type:'kill', k:['slime'], need:10, r:{exp:80,gold:200,ret:2},
    story:'艾德：「史萊姆的黏液裡有月痕碎屑，有人在森林裡餵牠們。去看看。」'},
-  {n:'第一章：鐵匠的兵器', d:'回村找鐵匠巴爾克，衝一次裝備。', type:'enchant', n:1, r:{ws:1,as:1,gold:200},
+  {n:'第一章：鐵匠的兵器', d:'回村找鐵匠巴爾克，衝一次裝備。', type:'enchant', need:1, r:{ws:1,as:1,gold:200},
    story:'艾德：「碎屑我收下了。去找巴爾克，你的兵器撐不了多久。」'},
-  {n:'第二章：哭泣森林', d:'掃蕩森林裡的哥布林：打倒 15 隻。', type:'kill', k:['goblin'], n:15, r:{exp:300,gold:500,big:3},
+  {n:'第二章：哭泣森林', d:'掃蕩森林裡的哥布林：打倒 15 隻。', type:'kill', k:['goblin'], need:15, r:{exp:300,gold:500,big:3},
    story:'哥布林營地裡堆著一箱箱用灰布包好的月痕。有人拿食物跟牠們交換。'},
-  {n:'第二章：老根的哭聲', d:'打倒森林深處的腐木樹妖。', type:'kill', k:['treant'], n:1, r:{exp:800,gold:1500,ws:2},
+  {n:'第二章：老根的哭聲', d:'打倒森林深處的腐木樹妖。', type:'kill', k:['treant'], need:1, r:{exp:800,gold:1500,ws:2},
    story:'精靈遊俠希爾薇：「精靈守護千年的古樹被人埋進了月痕。從那天起，它每晚都在哭。」'},
-  {n:'第三章：骸骨荒原', d:'到骸骨荒原打倒 20 隻骷髏兵或木乃伊。', type:'kill', k:['skel','mummy'], n:20, r:{exp:1500,gold:1500},
+  {n:'第三章：骸骨荒原', d:'到骸骨荒原打倒 20 隻骷髏兵或木乃伊。', type:'kill', k:['skel','mummy'], need:20, r:{exp:1500,gold:1500},
    story:'樹妖的碎片上刻著羊頭骷髏，那是灰燼教團的記號。車轍印一路往南，通往一片沒有草的沙地。'},
-  {n:'第三章：銀誓', d:'打倒荒原中央的白骨巨像。', type:'kill', k:['colossus'], n:1, r:{exp:4000,gold:4000,as:2},
+  {n:'第三章：銀誓', d:'打倒荒原中央的白骨巨像。', type:'kill', k:['colossus'], need:1, r:{exp:4000,gold:4000,as:2},
    story:'老學者諾恩：「教團在餵封印下的那個人。他叫卡爾薩，三百年前銀月騎士團的團長。」'},
-  {n:'第四章：地底的影子', d:'打倒 10 隻沙漠巨蟲，救出受傷的黑暗妖精。', type:'kill', k:['worm'], n:10, r:{exp:3000,gold:3000,big:5},
+  {n:'第四章：地底的影子', d:'打倒 10 隻沙漠巨蟲，救出受傷的黑暗妖精。', type:'kill', k:['worm'], need:10, r:{exp:3000,gold:3000,big:5},
    story:'艾德的右手被巨像壓碎，再也握不了劍。他把劍交給你：「它叫銀誓。它不會讓你變強，只會提醒你為什麼要握劍。」'},
-  {n:'第五章：熔岩洞窟', d:'擊退灰燼教團：打倒 15 隻魔族祭司。', type:'kill', k:['cultist'], n:15, r:{exp:6000,gold:5000},
+  {n:'第五章：熔岩洞窟', d:'擊退灰燼教團：打倒 15 隻魔族祭司。', type:'kill', k:['cultist'], need:15, r:{exp:6000,gold:5000},
    story:'黑暗妖精薇拉：「我們三年前就警告過你們。下一個滿月，封印就擋不住了。」'},
-  {n:'第六章：月心', d:'打倒熾焰領主卡爾薩。', type:'kill', k:['firelord'], n:1, r:{exp:15000,gold:10000,ws:3,as:3},
+  {n:'第六章：月心', d:'打倒熾焰領主卡爾薩。', type:'kill', k:['firelord'], need:1, r:{exp:15000,gold:10000,ws:3,as:3},
    story:'卡爾薩：「我也握過那把劍。有了月心，你的劍永遠不會斷。拿去吧。」'},
   {n:'終章：新月之下', d:'回村向守衛艾德報告', type:'talk', r:{gold:5000},
    story:'夜空出現了一道細細的銀色彎月。北方雪山的天際，卻翻出了一絲紅光……（第二部「血月之預言」敬請期待）'}
@@ -273,3 +274,43 @@ export const DAILY_POOL = [
 export function dailyFor(day){ const R=rng([...day].reduce((a,c)=>a*31+c.charCodeAt(0),7)); const idx=[...DAILY_POOL.keys()];
   const out=[]; while(out.length<3){ const i=idx.splice(Math.floor(R()*idx.length),1)[0]; out.push({...DAILY_POOL[i],p:0,done:false}); } return out; }
 export const RARN = ['','魔法','稀有','傳說'];
+
+// ---------- class advancement (Lv.30) ----------
+export const ADV_LV = 30, ADV_COST = 20000;
+export const ADV = {
+  paladin:{base:'knight',n:'聖騎士',d:'以聖光守護隊友的騎士。體質、HP、防禦提升。',bon:{con:6,hp:200,def:10},sk:[
+    {id:'p1',n:'聖光審判',lv:30,mp:20,cd:6,tgt:1,ai:'tgt',d:'3 倍神聖傷害，並回復自己 8% HP'},
+    {id:'p2',n:'神聖護盾',lv:40,mp:35,cd:25,ai:'buff',d:'自己和附近隊友 6 秒受傷減半，並回復 HP'}]},
+  berserker:{base:'knight',n:'狂戰士',d:'越戰越狂的戰鬼。力量與攻擊力提升。',bon:{str:6,atk:12},sk:[
+    {id:'b1',n:'狂暴',lv:30,mp:15,cd:20,ai:'buff',d:'10 秒內攻擊力 +40%'},
+    {id:'b2',n:'裂地斬',lv:40,mp:28,cd:8,ai:'aoe',d:'重擊地面，周圍敵人 2.4 倍傷害並暈眩'}]},
+  sharpshooter:{base:'ranger',n:'神射手',d:'一箭定生死的狙擊手。敏捷與攻擊力提升。',bon:{dex:6,atk:10},sk:[
+    {id:'s1',n:'爆裂箭',lv:30,mp:18,cd:5,tgt:1,ai:'tgt',d:'2.4 倍傷害，並炸傷周圍敵人'},
+    {id:'s2',n:'箭雨',lv:40,mp:30,cd:9,tgt:1,ai:'aoe',d:'目標周圍降下箭雨，範圍 1.9 倍傷害'}]},
+  windwalker:{base:'ranger',n:'風行者',d:'與風同行的遊俠。敏捷、體質、HP 提升。',bon:{dex:4,con:3,hp:80},sk:[
+    {id:'w1',n:'旋風箭',lv:30,mp:18,cd:5,tgt:1,ai:'tgt',d:'連射五箭'},
+    {id:'w2',n:'風之守護',lv:40,mp:30,cd:25,ai:'buff',d:'自己和隊友 10 秒攻速 +60%、閃避 +15%'}]},
+  archmage:{base:'mage',n:'大魔導士',d:'掌握天災的法師。智力與攻擊力提升。',bon:{int:6,atk:12},sk:[
+    {id:'a1',n:'隕石術',lv:30,mp:30,cd:7,tgt:1,ai:'tgt',d:'召喚隕石，目標周圍 3 倍傷害'},
+    {id:'a2',n:'雷霆風暴',lv:40,mp:40,cd:10,ai:'aoe',d:'周圍大範圍 2.2 倍傷害並暈眩'}]},
+  priestess:{base:'mage',n:'月之祭司',d:'侍奉新月的治癒者。精神、MP、HP 提升。',bon:{wis:6,mp:150,hp:100},sk:[
+    {id:'q1',n:'月光祝福',lv:30,mp:30,cd:12,ai:'heal',d:'大量回復自己和隊友，並 6 秒受傷減半'},
+    {id:'q2',n:'審判之光',lv:40,mp:28,cd:6,tgt:1,ai:'tgt',d:'聖光貫穿目標，3.5 倍傷害'}]},
+  shadowdancer:{base:'darkelf',n:'影舞者',d:'在影子間起舞的刺客。敏捷與 HP 提升。',bon:{dex:6,hp:60},sk:[
+    {id:'h1',n:'影分身',lv:30,mp:18,cd:18,ai:'buff',d:'10 秒閃避 +40%，下一擊必爆擊'},
+    {id:'h2',n:'千刃',lv:40,mp:30,cd:8,ai:'aoe',d:'刀刃亂舞，周圍敵人受到 6 次攻擊'}]},
+  assassin:{base:'darkelf',n:'暗殺者',d:'專取要害的殺手。力量與攻擊力提升。',bon:{str:6,atk:12},sk:[
+    {id:'x1',n:'致命一擊',lv:30,mp:20,cd:7,tgt:1,ai:'tgt',d:'必定爆擊的 4 倍傷害'},
+    {id:'x2',n:'劇毒爆發',lv:40,mp:28,cd:9,tgt:1,ai:'tgt',d:'重擊並施加劇毒 8 秒'}]}
+};
+export const ADV_KEYS = Object.keys(ADV);
+export function skillsOf(c){ return (SKILLS[c.cls]||[]).concat(c.adv&&ADV[c.adv]?ADV[c.adv].sk:[]); }
+// ---------- teleporter ----------
+export const TELE = [
+  {k:'forest',n:'哭泣森林・入口',map:'forest',p:100,lv:'1～10'},
+  {k:'waste',n:'骸骨荒原・入口',map:'waste',p:400,lv:'10～18'},
+  {k:'cave',n:'熔岩洞窟・入口',map:'cave',p:1200,lv:'18 以上'},
+  {k:'treant',n:'腐木樹妖的巢穴',map:'forest',boss:1,p:600,lv:'Boss Lv.12'},
+  {k:'colossus',n:'白骨巨像的祭壇',map:'waste',boss:1,p:2000,lv:'Boss Lv.20'},
+  {k:'firelord',n:'卡爾薩的熔岩王座',map:'cave',boss:1,p:5000,lv:'Boss Lv.28'}
+];

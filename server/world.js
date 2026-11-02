@@ -1,5 +1,5 @@
 // Authoritative game world: one shared instance per map, ticking at 10 Hz.
-import { SKILLS, QUESTS, dailyFor, makeLegend, LEGEND_W, RARN, itemBaseName } from '../shared/data.js';
+import { ADV, ADV_LV, ADV_COST, TELE, skillsOf, SKILLS, QUESTS, dailyFor, makeLegend, LEGEND_W, RARN, itemBaseName } from '../shared/data.js';
 import { CLS, MT, MAPDEF, SHOP, INV_N, BAGMAX, PK_MIN_LV, CLAN_COST, CLAN_MIN_LV, DIRS, NOSHIELD, SHOP_GEAR,
   buildMap, arrivalPoint, inSafeZone, findPath, calcStats, expNeed, enchRate, sellP, shopPrice, makeItem, randomSlot,
   itemName, eqSlotFor, itemScore, cheb, dist, NAME_RE } from '../shared/data.js';
@@ -28,7 +28,7 @@ export class World {
     c.inv = Object.assign({pot:0,big:0,blue:0,ret:0,ws:0,as:0}, c.inv||{});
     if(c.clan && !this.clans.has(c.clan)) c.clan = null;
     const P = { id:'p'+(this.nextId++), ws:session.ws, accountId:session.accountId, charId:c.id, c, name:c.name,
-      x:c.x, y:c.y, path:[], moveAcc:0, target:null, atkCd:0, skCd:0, cds:{}, buff:{iron:0,haste:0,shadow:0,nc:false}, lastHit:-99, dead:0, face:2, dir:1,
+      x:c.x, y:c.y, path:[], moveAcc:0, target:null, atkCd:0, skCd:0, cds:{}, buff:{iron:0,haste:0,shadow:0,rage:0,nc:false}, lastHit:-99, dead:0, face:2, dir:1,
       party:null, pk:false, purple:0, chatT:0, saveT:AUTOSAVE, inst:null, dirty:true, msgCount:0 };
     delete c.id;
     if(c.mq==null) c.mq=0; if(c.mqp==null) c.mqp=0; this.checkDaily(P);
@@ -126,7 +126,7 @@ export class World {
     sp:c.sp, pts:c.pts, eq:c.eq, bag:c.bag, inv:c.inv, lawful:c.lawful, pk:P.pk, clan:c.clan||null, clanLeader: c.clan&&this.clans.get(c.clan)?.leader===P.name,
     party: P.party?[...P.party.members].map(m=>({id:m.id,name:m.name,lv:m.c.lv,cls:m.c.cls,hp:m.c.hp,maxHP:m.stats.maxHP,map:m.inst?.id})):null,
     partyLeader: P.party?P.party.leader===P:false, skCd:Math.max(0,P.skCd), dead:P.dead>0,
-    cds:(SKILLS[c.cls]||[]).map(k=>Math.max(0,+(P.cds[k.id]||0).toFixed(1))), buff:{iron:Math.max(0,P.buff.iron|0),haste:Math.max(0,P.buff.haste|0),shadow:Math.max(0,P.buff.shadow|0)},
+    adv:c.adv||null, cds:skillsOf(c).map(k=>Math.max(0,+(P.cds[k.id]||0).toFixed(1))), buff:{iron:Math.max(0,P.buff.iron|0),haste:Math.max(0,P.buff.haste|0),shadow:Math.max(0,P.buff.shadow|0),rage:Math.max(0,P.buff.rage|0)},
     mq:c.mq, mqp:c.mqp, daily:c.daily }; }
   snapshot(inst){
     const p=[],m=[];
@@ -141,7 +141,7 @@ export class World {
   // ---------- players ----------
   updatePlayer(P,dt){
     const c=P.c,inst=P.inst; P.atkCd-=dt; P.skCd-=dt; P.purple=Math.max(0,P.purple-dt);
-    for(const k in P.cds) P.cds[k]-=dt; const B=P.buff; for(const k of ['iron','haste','shadow']) if(B[k]>0){ B[k]-=dt; if(B[k]<=0){ B[k]=0; if(k==='shadow') B.nc=false; this.me(P); } }
+    for(const k in P.cds) P.cds[k]-=dt; const B=P.buff; for(const k of ['iron','haste','shadow','rage']) if(B[k]>0){ B[k]-=dt; if(B[k]<=0){ B[k]=0; if(k==='shadow') B.nc=false; this.me(P); } }
     if(P.dead>0){ P.dead-=dt; if(P.dead<=0){ c.hp=P.stats.maxHP; c.mp=P.stats.maxMP; this.enterMap(P,'village',{x:15,y:14}); } return; }
     // regen every second
     P.regT=(P.regT||0)+dt; if(P.regT>=1){ P.regT=0; const town=inst.id==='village';
@@ -183,7 +183,7 @@ export class World {
     if(why){ if(!quiet) this.logTo(A,why); return false; } return true; }
 
   // ---------- combat ----------
-  rollDmg(P,mult,targetDef,o={}){ const s=P.stats; let crit=o.crit||(!o.nocrit&&Math.random()<s.crit); if(P.buff.nc){ crit=true; P.buff.nc=false; }
+  rollDmg(P,mult,targetDef,o={}){ const s=P.stats; if(P.buff&&P.buff.rage>0) mult*=1.4; let crit=o.crit||(!o.nocrit&&Math.random()<s.crit); if(P.buff.nc){ crit=true; P.buff.nc=false; }
     return { dmg:Math.max(1,Math.round(s.atk*rnd(.85,1.15)*mult*(crit?1.7:1))-targetDef), crit }; }
   playerAttack(P,t,skill){
     const inst=P.inst,c=P.c,k=c.cls; this.face(P,t.x-P.x,t.y-P.y);
@@ -212,7 +212,7 @@ export class World {
     this.ev(inst,'d',T.id,dmg,(crit?1:0)|(o.label?4:0),o.label||'');
     if(T.c.hp<=0) this.killPlayer(T,P);
   }
-  useSkill(P,i){ const c=P.c,list=SKILLS[c.cls]; i=Math.max(0,Math.min(2,i|0)); const sk=list[i];
+  useSkill(P,i){ const c=P.c,list=skillsOf(c); i=Math.max(0,Math.min(list.length-1,i|0)); const sk=list[i];
     if(P.dead>0||!sk) return; if(c.lv<sk.lv) return this.logTo(P,`${sk.n}要 Lv.${sk.lv} 才能使用。`);
     if((P.cds[sk.id]||0)>0) return; if(c.mp<sk.mp) return this.logTo(P,'MP 不夠。');
     const inst=P.inst; let t=null;
@@ -221,7 +221,8 @@ export class World {
     c.mp-=sk.mp; P.cds[sk.id]=sk.cd; P.skCd=sk.cd; P.atkCd=Math.max(P.atkCd,.3); this.me(P);
     this.questEv(P,'skill',null,1);
     const live=()=>t.id[0]==='m'?inst.mobs.get(t.id):(t.dead>0?null:t);
-    const near=(r,fn)=>{ for(const m of [...inst.mobs.values()]) if(Math.hypot(m.x-P.x,m.y-P.y)<=r) fn(m); };
+    const near=(r,fn)=>{ for(const m of [...inst.mobs.values()]) if(m.hp>0&&inst.mobs.has(m.id)&&Math.hypot(m.x-P.x,m.y-P.y)<=r) fn(m); };
+    const party=r=>P.party?[...P.party.members].filter(o=>o.inst===inst&&o.dead<=0&&dist(o,P)<=r):[P];
     switch(sk.id){
       case 'k1': this.ev(inst,'a',P.id,t.id,'skill_knight'); this.hitTarget(P,t,2.5,{label:'衝擊斬',stun:1.3,push:1}); break;
       case 'k2': this.ev(inst,'fx',P.id,'whirl'); near(1.6,m=>this.damageMob(P,m,1.7,{label:'旋風斬'})); break;
@@ -241,6 +242,24 @@ export class World {
       case 'd2': this.ev(inst,'a',P.id,t.id,'skill_darkelf'); this.hitTarget(P,t,1.1,{label:'毒刃'});
         { const tt=live(); if(tt&&tt.id[0]==='m'){ tt.poison={t:6,d:Math.max(1,Math.round(P.stats.atk*.5)),by:P.id,tick:1}; this.ev(inst,'ps',tt.id,6); } } break;
       case 'd3': P.buff.shadow=6; P.buff.nc=true; this.ev(inst,'fx',P.id,'shadow'); this.logTo(P,'影遁：6 秒內閃避 +40%，下一擊必定爆擊。'); break;
+      // ---- advanced classes ----
+      case 'p1': this.ev(inst,'a',P.id,t.id,'skill_knight'); this.ev(inst,'fx',t.id,'holy'); this.hitTarget(P,t,3,{label:'聖光審判'}); { const h=Math.round(P.stats.maxHP*.08); c.hp=Math.min(P.stats.maxHP,c.hp+h); this.ev(inst,'h',P.id,h); } break;
+      case 'p2': for(const o of party(6)){ o.buff.iron=6; const h=Math.round(o.stats.maxHP*.15); o.c.hp=Math.min(o.stats.maxHP,o.c.hp+h); this.ev(inst,'h',o.id,h); this.ev(inst,'fx',o.id,'iron'); this.me(o); } break;
+      case 'b1': P.buff.rage=10; this.ev(inst,'fx',P.id,'rage'); this.logTo(P,'狂暴：10 秒內攻擊力 +40%。'); break;
+      case 'b2': this.ev(inst,'fx',P.id,'quake'); near(2.3,m=>this.damageMob(P,m,2.4,{label:'裂地斬',stun:1})); break;
+      case 's1': { this.ev(inst,'a',P.id,t.id,'pierce'); const cx=t.x,cy=t.y; this.ev(inst,'fx',t.id,'blast');
+        if(t.id[0]==='m'){ for(const m of [...inst.mobs.values()]) if(Math.hypot(m.x-cx,m.y-cy)<=1.7) this.damageMob(P,m,m===t?2.4:1.2,{label:m===t?'爆裂箭':''}); } else this.hitTarget(P,t,2.4,{label:'爆裂箭'}); break; }
+      case 's2': { const cx=t.x,cy=t.y; this.ev(inst,'fx',t.id,'rain'); for(const m of [...inst.mobs.values()]) if(Math.hypot(m.x-cx,m.y-cy)<=2.6) this.damageMob(P,m,1.9,{label:'箭雨'}); if(t.id[0]==='p') this.hitTarget(P,t,1.9,{label:'箭雨'}); break; }
+      case 'w1': this.ev(inst,'a',P.id,t.id,'skill_ranger'); for(let k=0;k<5;k++){ const tt=live(); if(!tt) break; this.hitTarget(P,tt,.95,{label:'旋風箭'}); } break;
+      case 'w2': for(const o of party(6)){ o.buff.haste=10; this.ev(inst,'fx',o.id,'haste'); this.me(o); } break;
+      case 'a1': { const cx=t.x,cy=t.y; this.ev(inst,'fx',t.id,'meteor'); if(t.id[0]==='m'){ for(const m of [...inst.mobs.values()]) if(Math.hypot(m.x-cx,m.y-cy)<=2.2) this.damageMob(P,m,3,{label:'隕石術'}); } else this.hitTarget(P,t,3,{label:'隕石術'}); break; }
+      case 'a2': this.ev(inst,'fx',P.id,'storm'); near(3.3,m=>this.damageMob(P,m,2.2,{label:'雷霆風暴',stun:1.2})); break;
+      case 'q1': { const amt=Math.round(80+P.stats.wis*6+c.lv*8); for(const o of party(7)){ o.c.hp=Math.min(o.stats.maxHP,o.c.hp+amt); o.buff.iron=Math.max(o.buff.iron,6); this.ev(inst,'h',o.id,amt); this.me(o); } break; }
+      case 'q2': this.ev(inst,'fx',t.id,'holy'); this.hitTarget(P,t,3.5,{label:'審判之光'}); break;
+      case 'h1': P.buff.shadow=10; P.buff.nc=true; this.ev(inst,'fx',P.id,'shadow'); break;
+      case 'h2': this.ev(inst,'fx',P.id,'whirl'); for(let k=0;k<6;k++) near(1.8,m=>{ if(m.hp>0) this.damageMob(P,m,.75,{label:k===0?'千刃':''}); }); break;
+      case 'x1': this.ev(inst,'a',P.id,t.id,'skill_darkelf'); this.hitTarget(P,t,4,{label:'致命一擊',crit:true}); break;
+      case 'x2': this.ev(inst,'a',P.id,t.id,'skill_darkelf'); this.hitTarget(P,t,1.6,{label:'劇毒爆發'}); { const tt=live(); if(tt&&tt.id[0]==='m'){ tt.poison={t:8,d:Math.max(1,Math.round(P.stats.atk*1.0)),by:P.id,tick:1}; this.ev(inst,'ps',tt.id,8); } } break;
     }
   }
   killMob(inst,m){ const t=MT[m.k]; inst.mobs.delete(m.id); this.ev(inst,'k',m.id);
@@ -262,14 +281,14 @@ export class World {
       for(const o of hitters){ this.questEv(o,'boss',null,1); if(!group.includes(o)) this.questEv(o,'kill',m.k,1); } }
     const owners=new Set(group.map(o=>o.id)), tier=inst.def.tier;
     const drop=(L)=>this.dropLoot(inst,m.x,m.y,L,owners,best);
-    if(m.boss){ drop({k:'ws',n:2}); drop({k:'as',n:2}); drop({k:'big',n:3});
-      drop({it:makeItem(Math.random()<.5?'w':randomSlot(),Math.min(4,tier+1))}); drop({it:makeItem(randomSlot(),Math.min(4,tier+1))}); if(Math.random()<.5) drop({it:makeItem(randomSlot(),tier)});
-      const legP = m.k==='firelord'?.25:m.k==='colossus'?.12:.06; if(Math.random()<legP) drop({it:makeLegend(Math.random()<.7?'w':'n')});
+    if(m.boss){ drop({k:'ws'}); drop({k:'as'}); drop({k:'big',n:2});
+      drop({it:makeItem(Math.random()<.5?'w':randomSlot(),Math.min(4,tier+1))}); if(Math.random()<.4) drop({it:makeItem(randomSlot(),Math.min(4,tier+1))});
+      const legP = m.k==='firelord'?.12:m.k==='colossus'?.06:.03; if(Math.random()<legP) drop({it:makeLegend(Math.random()<.7?'w':'n')});
       this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`${group.map(o=>o.name).join('、')} 擊倒了 ${t.n}！`}); }
-    else{ if(Math.random()<.22) drop({k:'pot'}); if(Math.random()<.04+tier*.01) drop({k:'ws'}); if(Math.random()<.05+tier*.01) drop({k:'as'}); if(Math.random()<.06) drop({k:'blue'});
+    else{ if(Math.random()<.15) drop({k:'pot'}); if(Math.random()<.02+tier*.008) drop({k:'ws'}); if(Math.random()<.025+tier*.008) drop({k:'as'}); if(Math.random()<.04) drop({k:'blue'});
       const ec=this.eclipse.on;
-      if(Math.random()<(ec?.12:.07)){ const it=makeItem(randomSlot(),Math.random()<.7?tier:Math.max(0,tier-1)); if(ec&&(it.q|0)<2&&Math.random()<.25){ it.q=2; it.bon=Object.assign(it.bon||{},{str:1+tier,con:1+tier}); } drop({it}); }
-      if(Math.random()<.0015*tier*(ec?3:1)) drop({it:makeLegend(Math.random()<.7?'w':'n')}); }
+      if(Math.random()<(ec?.08:.04)){ const it=makeItem(randomSlot(),Math.random()<.7?tier:Math.max(0,tier-1)); if(ec&&(it.q|0)<2&&Math.random()<.25){ it.q=2; it.bon=Object.assign(it.bon||{},{str:1+tier,con:1+tier}); } drop({it}); }
+      if(Math.random()<.0005*tier*(ec?3:1)) drop({it:makeLegend(Math.random()<.7?'w':'n')}); }
   }
   // ---------- ground loot ----------
   dropLoot(inst,x,y,L,owners,by){ const now=Date.now()/1000, M=inst.m;
@@ -379,7 +398,7 @@ export class World {
     const top=topClans[0]&&topClans[0][0]!=='（無血盟）'?topClans[0][0]:null;
     if(top) for(const [P] of parts) if(P.c.clan===top){ P.c.inv.ws=(P.c.inv.ws||0)+2; this.me(P); }
     const by=parts.sort((a,b)=>b[1]-a[1])[0]?.[0];
-    if(by){ for(let i=0;i<3;i++) this.dropLoot(inst,m.x,m.y,{it:makeLegend(Math.random()<.75?'w':'n')},owners,by); if(Math.random()<.5) this.dropLoot(inst,m.x,m.y,{it:makeLegend('w')},owners,by);
+    if(by){ for(let i=0;i<2;i++) this.dropLoot(inst,m.x,m.y,{it:makeLegend(Math.random()<.75?'w':'n')},owners,by); if(Math.random()<.3) this.dropLoot(inst,m.x,m.y,{it:makeLegend('w')},owners,by);
       for(let i=0;i<4;i++) this.dropLoot(inst,m.x,m.y,{it:makeItem(randomSlot(),4)},owners,by); this.dropLoot(inst,m.x,m.y,{k:'ws',n:3},owners,by); }
     this.broadcast({t:'event',k:'wb',on:false});
     this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`卡爾薩殘火熄滅了！血盟傷害排名：${topClans.slice(0,3).map(([k,d],i)=>`${i+1}. ${k}（${Math.round(d/tot*100)}%）`).join('　')}${top?`。「${top}」成員額外獲得武器強化卷軸 ×2！`:''}`}); }
@@ -388,7 +407,7 @@ export class World {
   checkDaily(P){ const c=P.c,d=today(); if(!c.daily||c.daily.day!==d){ c.daily={day:d,list:dailyFor(d),bonus:false}; this.me(P); } }
   questEv(P,type,k,n){ const c=P.c; this.checkDaily(P);
     const q=QUESTS[c.mq];
-    if(q&&q.type===type&&(type!=='kill'||q.k.includes(k))){ c.mqp=Math.min(q.n,(c.mqp||0)+n); this.me(P); if(c.mqp>=q.n) this.completeQuest(P); }
+    if(q&&q.type===type&&(type!=='kill'||q.k.includes(k))){ c.mqp=Math.min(q.need,(c.mqp||0)+n); this.me(P); if(c.mqp>=q.need) this.completeQuest(P); }
     const dk = type==='kill'?'kill':type;
     let changed=false; for(const dq of c.daily.list){ if(dq.done||dq.k!==dk) continue; dq.p=Math.min(dq.n,dq.p+n); changed=true;
       if(dq.p>=dq.n){ dq.done=true; const e=Math.round(expNeed(c.lv)*.12), g=200+c.lv*40; this.gainExp(P,e); c.gold+=g; c.inv.ws=(c.inv.ws||0)+(dq.k==='boss'?1:0); c.inv.big=(c.inv.big||0)+2;
@@ -477,6 +496,15 @@ export class World {
       case 'buygear': { if(!town) return; const ok=SHOP_GEAR.some(([s,t])=>s===msg.s&&t===msg.tier); if(!ok) return; const pr=shopPrice(msg.s,msg.tier);
         if(c.bag.length>=BAGMAX) return this.logTo(P,'背包滿了。'); if(c.gold<pr) return this.logTo(P,'金幣不夠。'); c.gold-=pr; c.bag.push({s:msg.s,t:msg.tier,en:0}); this.me(P); return this.logTo(P,'買好了，到角色頁裝備。'); }
       case 'sell': { if(!town) return this.logTo(P,'要在村莊才能賣東西。'); const i=msg.i|0,it=c.bag[i]; if(!it) return; c.bag.splice(i,1); c.gold+=sellP(it); this.me(P); return this.logTo(P,`賣掉 ${itemName(it,c.cls)}`); }
+      case 'advance': { const A=ADV[String(msg.to)]; if(!town||!A||c.adv||A.base!==c.cls) return; if(c.lv<ADV_LV) return this.logTo(P,`Lv.${ADV_LV} 才能轉職。`); if(c.gold<ADV_COST) return this.logTo(P,`轉職需要 ${ADV_COST.toLocaleString()} 金幣。`);
+        c.gold-=ADV_COST; c.adv=String(msg.to); P.stats=calcStats(c); c.hp=P.stats.maxHP; c.mp=P.stats.maxMP; this.ev(inst,'l',P.id); this.me(P);
+        this.send(P,{t:'qdone',n:`轉職為「${A.n}」`,r:`學會 ${A.sk.map(k=>k.n).join('、')}`});
+        return this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`${P.name} 轉職為${A.n}！`}); }
+      case 'tele': { const T=TELE.find(x=>x.k===msg.to); if(!town||!T||P.dead>0) return; if(c.gold<T.p) return this.logTo(P,'金幣不夠。');
+        const dest=this.maps[T.map],M=dest.m; let pos=null;
+        if(T.boss){ for(let r=4;r<=7&&!pos;r++) for(let a=0;a<16&&!pos;a++){ const x=Math.round(M.boss.x+Math.cos(a/16*6.283)*r),y=Math.round(M.boss.y+Math.sin(a/16*6.283)*r); if(x>1&&y>1&&x<M.W-2&&y<M.H-2&&!M.blk[y*M.W+x]) pos={x,y}; } }
+        c.gold-=T.p; this.me(P); this.logTo(P,`傳送師露娜：「祝你一路平安。」（-${T.p} 金幣）`);
+        this.enterMap(P,T.map,pos,pos?null:'village'); return; }
       case 'sellall': { if(!town) return this.logTo(P,'要在村莊才能賣東西。'); const maxQ=Math.max(0,Math.min(2,msg.q|0)); let n=0,g=0;
         c.bag=c.bag.filter(it=>{ if(it.lock||it.leg||(it.q|0)>maxQ) return true; n++; g+=sellP(it); return false; });
         c.gold+=g; this.me(P); return this.logTo(P,n?`一鍵販賣：賣掉 ${n} 件，獲得 ${g.toLocaleString()} 金幣。`:'沒有可以賣的東西（鎖定、傳說和更高稀有度的不會賣）。'); }

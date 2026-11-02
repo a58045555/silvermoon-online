@@ -1,6 +1,6 @@
 // 銀月大陸 Online client — built by tools/build_client.py from client/header.js + client/legacy.js + client/client.js
 import { CLS, STATN, STATD, MT, MAPDEF, SHOP, INV_N, BAGMAX, SLOTS, SLOTN, NOSHIELD, BIG, SHOP_GEAR, PK_MIN_LV, CLAN_COST, CLAN_MIN_LV,
-  SKILLS, QUESTS, LEGEND_W, RARN, rng, buildMap, itemBase, itemBaseName, itemName, itemStat, eqSlotFor, enchRate, sellP, shopPrice, expNeed, cheb, dist } from '/shared/data.js';
+  SKILLS, QUESTS, LEGEND_W, RARN, ADV, ADV_KEYS, ADV_LV, ADV_COST, TELE, skillsOf, rng, buildMap, itemBase, itemBaseName, itemName, itemStat, eqSlotFor, enchRate, sellP, shopPrice, expNeed, cheb, dist } from '/shared/data.js';
 
 const $ = s=>document.querySelector(s);
 const rnd=(a,b)=>a+Math.random()*(b-a), ri=(a,b)=>Math.floor(rnd(a,b+1)), pick=a=>a[Math.floor(Math.random()*a.length)];
@@ -639,6 +639,13 @@ function onEvent(e){
     if(kind==='iron'){ vfx('crit',X,Y-24,{s:.8,alpha:.85}); p.bf.iron=now+8; parts.push({type:'ring',x:X,y:Y-14,t:0,life:.5,r:TS*1.8,c:'120,180,255'}); SFX.ok(); }
     if(kind==='haste'){ vfx('shockwave',X,Y,{s:.45}); p.bf.haste=now+8; burst(X,Y-10,24,['#b8ffb0','#7fe08a','#fff'],140,{g:-80}); SFX.portal(); }
     if(kind==='shadow'){ vfx('shadow',X,Y-18,{s:1.1}); p.bf.shadow=now+6; burst(X,Y-14,30,['#3a2a5a','#8a4cff','#1a1028'],120,{g:-40}); SFX.portal(); }
+    if(kind==='holy'){ vfx('crit',X,Y-30,{s:1.3}); burst(X,Y-30,30,['#fff6c0','#ffd84a','#ffffff'],180,{g:-40}); freeze(.05); }
+    if(kind==='rage'){ p.bf.rage=now+10; vfx('explosion',X,Y-20,{s:.6,alpha:.8}); burst(X,Y-20,30,['#ff4a2a','#ffb070','#c4301a'],160,{g:-80}); SFX.crit(); }
+    if(kind==='quake'){ vfx('shockwave',X,Y,{s:1.2}); vfx('explosion',X,Y-8,{s:.6}); doShake(9,.35); freeze(.06); SFX.slam(); }
+    if(kind==='blast'){ vfx('explosion',X,Y-12,{s:.8}); doShake(5,.2); }
+    if(kind==='rain'){ for(let i=0;i<9;i++) vfx('hit',X+rnd(-50,50),Y-10+rnd(-25,25),{s:.6,delay:i*.06}); doShake(4,.4); SFX.arrow(); }
+    if(kind==='meteor'){ vfx('explosion',X,Y-10,{s:1.5,delay:.15}); setTimeout(()=>{ doShake(12,.45); SFX.boom(); },150); freeze(.07); }
+    if(kind==='storm'){ vfx('frost-nova',X,Y,{s:1.5}); for(let i=0;i<6;i++) vfx('crit',X+rnd(-70,70),Y-20+rnd(-30,30),{s:.6,delay:i*.07}); doShake(8,.4); SFX.bolt(); }
     if(kind==='enrage'){ p.enr=true; burst(X,Y-40,80,['#ff4a1a','#ffd84a','#c4301a'],320); doShake(14,.7); SFX.boom(); banner={t:3,a:'卡爾薩 狂暴化',b:'火雨變得更密集了！'}; }
     return; }
   if(k==='ps'){ const m=ents.get(e[1]); if(m){ m.psEnd=now+e[2]; vfx('poison',fx(m),bodyY(m),{s:.8,follow:m}); } return; }
@@ -664,7 +671,7 @@ function showHit(T,h){
 function onMe(c){
   const first=!ME; const prevLv=ME?.lv; ME=c;
   if(P){ P.eq.w.en=c.eq.w.en|0; }
-  if(prevLv&&c.lv>prevLv){ SFX.level(); const L=SKILLS[c.cls].find(k=>k.lv>prevLv&&k.lv<=c.lv); if(L){ banner={t:3.5,a:'學會新技能',b:`${L.n}：${L.d}`}; } }
+  if(prevLv&&c.lv>prevLv){ SFX.level(); const L=skillsOf(c).find(k=>k.lv>prevLv&&k.lv<=c.lv); if(L){ banner={t:3.5,a:'學會新技能',b:`${L.n}：${L.d}`}; } }
   (c.cds||[]).forEach((v,i)=>cdEnd[i]=now+v);
   if(curPanel&&['bag','shop','smith','social','quest','guard','auto'].includes(curPanel)) openPanel(curPanel,curArg,true);
   hud(true);
@@ -672,7 +679,7 @@ function onMe(c){
 }
 
 /* ---------- telegraphs, ground loot, quest tracker ---------- */
-let invasion=null, wboss=false, eclipse=null, tgs=[], gone=new Map(), trackRect=null, ICONIMG=null; const loot=new Map(), cdEnd=[0,0,0];
+let invasion=null, wboss=false, eclipse=null, tgs=[], gone=new Map(), trackRect=null, ICONIMG=null; const loot=new Map(), cdEnd=[0,0,0,0,0];
 function lootList(){ return loot.values(); }
 function canPickLoot(L){ return !L.own||!ME||L.own.includes(ME.id)||now>L.ownEnd; }
 function lootIcon(L){ return L.it?iconIdx(L.it,ME?.cls):(INVI[L.k]??63); }
@@ -719,7 +726,7 @@ function wrapText(t,maxW){ const out=[]; let line=''; for(const ch of t){ if(ctx
 function drawTracker(){ if(!ME) return; const q=QUESTS[ME.mq],maxW=Math.min(220,VW*.46),rows=[];
   ctx.font='12px '+FONT; ctx.textAlign='left';
   if(hideTrack) rows.push(['▸ 任務（點一下展開）','#9a9078']);
-  else if(q){ rows.push(['◆ '+q.n,'#e8c46a']); for(const l of wrapText(q.d+(q.type!=='talk'?`（${ME.mqp}/${q.n}）`:''),maxW)) rows.push([l,'#ece2c8']); }
+  else if(q){ rows.push(['◆ '+q.n,'#e8c46a']); for(const l of wrapText(q.d+(q.type!=='talk'?`（${ME.mqp}/${q.need}）`:''),maxW)) rows.push([l,'#ece2c8']); }
   else rows.push(['◆ 主線完成','#e8c46a']);
   if(ME.daily&&!hideTrack){ const left=ME.daily.list.filter(x=>!x.done); rows.push([left.length?`每日 ${3-left.length}/3・${left[0].d}（${left[0].p}/${left[0].n}）`:'每日任務完成 ✓',left.length?'#9fc4e0':'#7fe08a']); }
   if(eclipse){ const left=Math.max(0,(eclipse.end-performance.now())/1000); if(left<=0) eclipse=null; else rows.unshift([`✦ 月蝕之夜 ${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')}・經驗 ×2`,'#ff7a8a']); }
@@ -844,7 +851,7 @@ window.addEventListener('keydown',e=>{ if(!inGame||!P||e.target.tagName==='INPUT
   if(e.key==='+'||e.key==='=') $('#bZoom').onclick();
   if(e.key==='Enter'){ e.preventDefault(); $('#chatIn').focus(); }
   if(e.key===' '){ e.preventDefault(); attackNearest(); }
-  if(e.key==='1') usePot(); if(e.key==='2'||e.key==='3'||e.key==='4') castSkill(+e.key-2); });
+  if(e.key==='1') usePot(); if('23456'.includes(e.key)&&e.key.length===1) castSkill(+e.key-2); });
 window.addEventListener('keyup',e=>{ if(e.key&&keysDown.delete(e.key.toLowerCase())) updKeyJoy(); });
 window.addEventListener('blur',()=>{ keysDown.clear(); updKeyJoy(); });
 /* ---------- joystick (phones) and WASD (computers) ---------- */
@@ -879,13 +886,13 @@ function attackNearest(){ if(!ME||!P||P.dead) return null; if(cur.id==='village'
   if(myTargetId!==m.id){ myTargetId=m.id; send({t:'attack',id:m.id}); parts.push({type:'ring',x:fx(m),y:fy(m),t:0,life:.3,r:22,c:'255,90,70'}); } joyHold=0; return m; }
 let pendSkill=null;
 function skillRange(){ return CLS[ME.cls].range<=1?1:CLS[ME.cls].range; }
-function castSkill(i){ if(!ME) return; const sk=SKILLS[ME.cls][i]; if(ME.lv<sk.lv) return addLog(`${sk.n}：Lv.${sk.lv} 解鎖。${sk.d}`); if(cdEnd[i]>now) return;
+function castSkill(i){ if(!ME) return; const sk=skillsOf(ME)[i]; if(!sk) return; if(ME.lv<sk.lv) return addLog(`${sk.n}：Lv.${sk.lv} 解鎖。${sk.d}`); if(cdEnd[i]>now) return;
   if(sk.tgt){ let t=myTarget(); if(!t||t.isPlayer&&!ME.pk) t=attackNearest(); if(!t) return;
     if(cheb(P,t)>skillRange()){ pendSkill={i,until:now+4}; return; } }
   send({t:'skill',i}); }
 function pendSkillThink(){ if(!pendSkill) return; const t=myTarget(); if(!t||now>pendSkill.until){ pendSkill=null; return; } if(cheb(P,t)<=skillRange()){ send({t:'skill',i:pendSkill.i}); pendSkill=null; } }
 $('#bAtk').onclick=()=>{ audioOn(); attackNearest(); };
-for(let i=0;i<3;i++) $('#bS'+i).onclick=()=>{audioOn();castSkill(i);};
+for(let i=0;i<5;i++) $('#bS'+i).onclick=()=>{audioOn();castSkill(i);};
 $('#bChat').onclick=()=>{ document.body.classList.toggle('chatOpen'); if(document.body.classList.contains('chatOpen')) setTimeout(()=>$('#chatIn').focus(),50); };
 $('#bQuest').onclick=()=>{audioOn();openPanel('quest');};
 $('#bRet').onclick=()=>{audioOn();if(cur?.id==='village')return addLog('你已經在村子裡了。');send({t:'ret'});};
@@ -898,7 +905,7 @@ $('#bPk').onclick=()=>{ if(!ME) return; if(ME.lv<PK_MIN_LV) return addLog(`Lv.${
 const autoBlk=new Map(); let autoT=0, potT=0, skillT=0, tgtSince=0, tgtHp=0, autoOrigin=null, resupply=false;
 // settings, saved per browser
 const AS_DEF={targets:{},hp:45,mp:20,sk:[1,1,1],pick:0,range:0,noPot:'ret',bagFull:'skip',buy:30,boss:0};
-let AS=Object.assign({},AS_DEF); try{ Object.assign(AS,JSON.parse(localStorage.getItem('sm_auto')||'{}')); }catch{}
+let AS=Object.assign({},AS_DEF,{sk:[1,1,1,1,1]}); try{ Object.assign(AS,JSON.parse(localStorage.getItem('sm_auto')||'{}')); }catch{}
 function saveAS(){ try{ localStorage.setItem('sm_auto',JSON.stringify(AS)); }catch{} }
 function toggleAuto(force){ auto=force!=null?force:!auto; $('#bAuto').classList.toggle('on',auto); autoOrigin=auto&&P?{x:P.x,y:P.y,map:cur.id}:null;
   addLog(auto?'掛機開始。':'掛機停止。'); if(!auto){ myTargetId=null; } }
@@ -907,7 +914,12 @@ function wantMob(k){ const t=AS.targets[cur.id]; return !t||t.includes(k); }
 function wantLoot(L){ if(AS.pick===3) return false; if(L.it){ if(ME.bag.length>=BAGMAX) return false; return (L.q|0)>=[0,1,2][AS.pick]; } return true; }
 let dodgeT=0;
 function inCircle(x,y){ return tgs.some(g=>Math.hypot(x-g.x,y-g.y)<=g.r+.4); }
-function autoSkill(t){ const L=SKILLS[ME.cls],c=ME.cls,hp=ME.hp/ME.maxHP; const ok=i=>AS.sk[i]&&ME.lv>=L[i].lv&&ME.mp>=L[i].mp&&cdEnd[i]<=now;
+function autoSkill(t){ const L=skillsOf(ME),c=ME.cls,hp=ME.hp/ME.maxHP; const ok=i=>L[i]&&AS.sk[i]!==0&&ME.lv>=L[i].lv&&ME.mp>=L[i].mp&&cdEnd[i]<=now;
+  // advanced-class skills first
+  { const inR2=cheb(P,t)<=(CLS[c].range<=1?1:CLS[c].range), near2=cur.mobs.filter(m=>Math.hypot(m.x-P.x,m.y-P.y)<=2.4).length, big2=t.boss||t.hp>ME.atk*3;
+    for(const i of [4,3]){ const k=L[i]; if(!k||!ok(i)) continue;
+      if(k.ai==='buff'&&(t.boss||hp<.7||near2>=2)) return i; if(k.ai==='heal'&&hp<.6) return i;
+      if(k.ai==='aoe'&&(near2>=2||t.boss)&&(!k.tgt||inR2)) return i; if(k.ai==='tgt'&&inR2&&big2) return i; } }
   const inR=cheb(P,t)<=(CLS[c].range<=1?1:CLS[c].range); const near=cur.mobs.filter(m=>Math.hypot(m.x-P.x,m.y-P.y)<=(c==='mage'?2.6:1.6)).length; const big=t.boss||t.hp>ME.atk*3;
   if(c==='mage'&&ok(2)&&hp<.55) return 2;
   if(c!=='mage'&&ok(2)&&(t.boss||hp<.6)) return 2;
@@ -950,7 +962,7 @@ function autoThink(dt){ if(!auto||!ME||!P||P.dead||joyHold>0) return; autoT-=dt;
 }
 // after returning home: restock red potions automatically
 function onArriveVillage(){ if(!resupply||!ME) return; resupply=false; if(AS.buy>0){ const need=Math.max(0,AS.buy-(ME.inv.pot||0)),can=Math.floor(ME.gold/20),q=Math.min(need,can); if(q>0){ send({t:'buy',k:'pot',q}); addLog(`自動補給：買了 ${q} 瓶紅色藥水。`); } } }
-function autoPanelHTML(){ const id=cur&&MAPDEF[cur.id]?.mobs?cur.id:(autoOrigin?.map||'forest'), list=mapMobs(id), sel=AS.targets[id], L=SKILLS[ME.cls];
+function autoPanelHTML(){ const id=cur&&MAPDEF[cur.id]?.mobs?cur.id:(autoOrigin?.map||'forest'), list=mapMobs(id), sel=AS.targets[id], L=skillsOf(ME);
   const chip=(on,attr,txt)=>`<button class="btn chip ${on?'on':''}" ${attr}>${txt}</button>`;
   const opt=(key,vals,labels)=>vals.map((v,i)=>chip(AS[key]===v,`data-as="${key}" data-v="${v}"`,labels[i])).join('');
   return `<button class="btn wide ${auto?'hot':'on'}" data-act="autogo" style="margin-bottom:8px">${auto?'停止掛機':'開始掛機'}</button>
@@ -980,13 +992,13 @@ let toastT=null; function toast(msg){ const el=$('#toast'); el.textContent=msg; 
 
 /* ---------- panels ---------- */
 let curPanel=null, curArg=null;
-const PT={auto:'掛機設定',quest:'任務',story:'故事',shop:'雜貨商 莉娜',smith:'鐵匠 巴爾克',bag:'角色',guard:'守衛 艾德',social:'社交',player:'玩家',clan:'血盟',rank:'排行榜',who:'在線玩家',ask:'邀請',trade:'交易'};
+const PT={tele:'傳送師 露娜',auto:'掛機設定',quest:'任務',story:'故事',shop:'雜貨商 莉娜',smith:'鐵匠 巴爾克',bag:'角色',guard:'守衛 艾德',social:'社交',player:'玩家',clan:'血盟',rank:'排行榜',who:'在線玩家',ask:'邀請',trade:'交易'};
 function openPanel(k,arg,keep){ if(keep&&curPanel!==k) return; curPanel=k; curArg=arg; const body=$('#pBody'),st=keep?body.scrollTop:0; $('#pTitle').textContent=k==='player'&&arg?arg.name:PT[k]; body.innerHTML=panelHTML(k,arg); $('#overlay').hidden=false; body.scrollTop=st; }
 function closePanel(force){ if(curPanel==='trade'&&!force) send({t:'tcancel'}); $('#overlay').hidden=true; curPanel=null; armed=null; }
 $('#pClose').onclick=()=>closePanel();
 $('#overlay').addEventListener('pointerdown',e=>{if(e.target.id==='overlay')closePanel();});
 function panelHTML(k,arg){ const c=ME; if(!c) return '';
-  if(k==='guard'){ const q=QUESTS[c.mq]; const qb=q&&q.type==='talk'?`<button class="btn wide on" data-act="qtalk">${c.mq===0?'「我來幫忙。」（接受主線）':'回報：'+esc(q.n)}</button>`:''; return qb+`<p>艾德：「現在村子裡不只你一個冒險者了。記住：村莊是安全區，出了傳送陣就可能被人攻擊。」</p>
+  if(k==='guard'){ const q=QUESTS[c.mq]; const advB=advHTML(c); const qb=advB+(q&&q.type==='talk'?`<button class="btn wide on" data-act="qtalk">${c.mq===0?'「我來幫忙。」（接受主線）':'回報：'+esc(q.n)}</button>`:''); return qb+`<p>艾德：「現在村子裡不只你一個冒險者了。記住：村莊是安全區，出了傳送陣就可能被人攻擊。」</p>
     <table><tr><td>哭泣森林</td><td>Lv.1～10・Boss 腐木樹妖</td></tr><tr><td>骸骨荒原</td><td>Lv.10～18・Boss 白骨巨像</td></tr><tr><td>熔岩洞窟</td><td>Lv.18 以上・Boss 熾焰領主</td></tr></table>
     <p style="margin-top:10px">「Lv.${PK_MIN_LV} 以上可以開 PK。殺死沒有紅名的人會變紅名，紅名死掉會掉裝備。打怪可以慢慢把正義值洗回來。」</p><p class="ds">你的正義值：${c.lawful}</p>`; }
   if(k==='shop') return `<p>莉娜：「藥水多帶一點，外面的人跟怪一樣兇。」</p>`+SHOP.map(s=>`<div class="row"><div class="bcell" style="width:40px;flex:none">${icon(INVI[s.k])}</div><div class="info"><div class="nm">${s.n}</div><div class="ds">${s.d}・${s.p} 金幣・持有 ${c.inv[s.k]||0}</div></div>${s.q.map(q=>`<button class="btn" data-buy="${s.k}" data-q="${q}" ${c.gold<s.p*q?'disabled':''}>買 ${q}</button>`).join('')}</div>`).join('')+`<div class="sect">賣東西（背包 ${c.bag.length}/${BAGMAX}）</div>${sellTools(c)}<div class="sect">你的金幣：${c.gold.toLocaleString()}</div>`;
@@ -1025,11 +1037,12 @@ function panelHTML(k,arg){ const c=ME; if(!c) return '';
     <div class="row2"><button class="btn" data-pact="whisper">私訊</button>${c.clanLeader&&!p.clan?`<button class="btn" data-pact="cinvite">邀請入盟</button>`:''}</div>
     <p class="ds">要攻擊這個玩家，先在「社交」開啟 PK 模式。</p>`; }
   if(k==='auto') return autoPanelHTML();
+  if(k==='tele') return `<p>露娜：「月光照得到的地方，我都能送你去。」</p>`+TELE.map(T=>`<div class="row"><div class="info"><div class="nm">${T.boss?'【Boss】':''}${esc(T.n)}</div><div class="ds">${MAPDEF[T.map].name}・建議 ${T.lv}・${T.p.toLocaleString()} 金幣</div></div><button class="btn" data-tele="${T.k}" ${c.gold<T.p?'disabled':''}>傳送</button></div>`).join('')+`<div class="sect">你的金幣：${c.gold.toLocaleString()}</div>`;
   if(k==='story') return `<div class="sect">${esc(arg.title||'')}</div><div class="story">${esc(arg.text||'')}</div>${arg.reward?`<p class="ds">獲得：${esc(arg.reward)}</p>`:''}<button class="btn wide" data-act="qpanel">查看任務</button>`;
   if(k==='quest'){ const q=QUESTS[c.mq];
-    const main=q?`<div class="sect">主線・${esc(q.n)}</div><div class="story">${esc(q.story)}</div><p><b>目標</b>：${esc(q.d)}</p>${q.type!=='talk'?`<div class="pbar"><i style="width:${Math.round(c.mqp/q.n*100)}%"></i></div><p class="ds">進度 ${c.mqp}/${q.n}</p>`:`<button class="btn wide on" data-act="goguard">${cur.id==='village'?'去找守衛艾德':'回村找守衛艾德'}</button>`}<p class="ds">章節 ${c.mq+1}/${QUESTS.length}</p>`:`<div class="sect">主線</div><p>你完成了「新月之誓」。北方的血月……就是另一個故事了。</p>`;
+    const main=q?`<div class="sect">主線・${esc(q.n)}</div><div class="story">${esc(q.story)}</div><p><b>目標</b>：${esc(q.d)}</p>${q.type!=='talk'?`<div class="pbar"><i style="width:${Math.round(c.mqp/q.need*100)}%"></i></div><p class="ds">進度 ${c.mqp}/${q.need}</p>`:`<button class="btn wide on" data-act="goguard">${cur.id==='village'?'去找守衛艾德':'回村找守衛艾德'}</button>`}<p class="ds">章節 ${c.mq+1}/${QUESTS.length}</p>`:`<div class="sect">主線</div><p>你完成了「新月之誓」。北方的血月……就是另一個故事了。</p>`;
     const d=c.daily; const daily=d?`<div class="sect">每日任務（${d.day}，台灣時間午夜重置）</div>`+d.list.map(x=>`<div class="qrow ${x.done?'done':''}"><span>${x.done?'✓ ':''}${esc(x.d)}</span><span>${x.done?'完成':x.p+'/'+x.n}</span></div>`).join('')+`<p class="ds">每完成一個：經驗、金幣、強力藥水 ×2。三個都完成再送武器、防具強化卷軸各 1。</p>`:'';
-    const sk=`<div class="sect">技能（快捷鍵 2・3・4）</div>`+SKILLS[c.cls].map(k=>`<div class="qrow ${c.lv>=k.lv?'':'ds'}"><span><b>${k.n}</b>　${esc(k.d)}</span><span>${c.lv>=k.lv?k.mp+' MP':'Lv.'+k.lv}</span></div>`).join('');
+    const sk=`<div class="sect">技能（快捷鍵 2～6）</div>`+skillsOf(c).map(k=>`<div class="qrow ${c.lv>=k.lv?'':'ds'}"><span><b>${k.n}</b>　${esc(k.d)}</span><span>${c.lv>=k.lv?k.mp+' MP':'Lv.'+k.lv}</span></div>`).join('');
     return main+daily+sk; }
   if(k==='ask') return `<p>${esc(arg.msg)}</p><div class="row2"><button class="btn" data-yes="1">接受</button><button class="btn ghost" data-no="1">拒絕</button></div>`;
   if(k==='clan'){ const cl=arg; if(!cl) return '<p>你沒有血盟。</p>';
@@ -1055,6 +1068,8 @@ $('#pBody').addEventListener('submit',e=>{ e.preventDefault(); const f=e.target.
   if(f==='cnotice') send({t:'cnotice',text:v('#iNotice')});
   if(f==='tgold') send({t:'tput',gold:+v('#iTgold')||0}); });
 $('#pBody').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b||b.type==='submit'&&b.form) return; audioOn(); const D=b.dataset;
+  if(D.tele){ closePanel(); return send({t:'tele',to:D.tele}); }
+  if(D.adv){ if(armed!=='adv'+D.adv){ armed='adv'+D.adv; return openPanel('guard'); } armed=null; send({t:'advance',to:D.adv}); return; }
   if(D.act==='autogo'){ closePanel(); if(cur.id==='village'){ addLog('先出村再開始掛機（掛機只在狩獵地圖運作）。'); } toggleAuto(!auto); return; }
   if(D.tgt!=null){ const id=MAPDEF[cur.id]?.mobs?cur.id:'forest',all=mapMobs(id); if(D.tgt==='*') delete AS.targets[id]; else { let t=AS.targets[id]?[...AS.targets[id]]:[...all]; t=t.includes(D.tgt)?t.filter(x=>x!==D.tgt):[...t,D.tgt]; if(!t.length||t.length===all.length) delete AS.targets[id]; else AS.targets[id]=t; } saveAS(); return openPanel('auto'); }
   if(D.as){ AS[D.as]=D.v==='tog'?(AS[D.as]?0:1):(isNaN(+D.v)?D.v:+D.v); saveAS(); return openPanel('auto'); }
@@ -1092,6 +1107,9 @@ $('#pBody').addEventListener('click',e=>{ const b=e.target.closest('button'); if
   if(D.gear) return send({t:'buygear',s:D.gear[0],tier:+D.gear[1]});
   if(D.ench){ const sl=D.ench,it=ME.eq[sl],r=enchRate(sl==='w'?'w':'a',it.en); if(r<1&&armed!==sl){ armed=sl; return openPanel('smith'); } armed=null; return send({t:'enchant',s:sl}); }
 });
+function advHTML(c){ if(c.adv) return `<p class="ds">你已轉職為「${ADV[c.adv].n}」。</p>`; const opts=ADV_KEYS.filter(k=>ADV[k].base===c.cls);
+  if(c.lv<ADV_LV) return `<p class="ds">Lv.${ADV_LV} 可以找我轉職：${opts.map(k=>ADV[k].n).join(' 或 ')}。</p>`;
+  return `<div class="sect">轉職（${ADV_COST.toLocaleString()} 金幣，選了就不能改）</div>`+opts.map(k=>{ const A=ADV[k]; return `<div class="gear"><div class="gname">${A.n}</div><div class="ds">${A.d}</div>${A.sk.map(s=>`<div class="ds">・<b>${s.n}</b>（Lv.${s.lv}）${s.d}</div>`).join('')}<button class="btn ${armed==='adv'+k?'hot':''}" data-adv="${k}" ${c.gold<ADV_COST?'disabled':''}>${armed==='adv'+k?'再按一次確定轉職':'轉職為'+A.n}</button></div>`; }).join(''); }
 function sellTools(c){ const town=cur.id==='village', a=q=>armed==='sell'+q;
   return `<div class="row2" style="margin:4px 0 6px"><button class="btn" data-act="autoequip">一鍵換上更好的裝備</button><button class="btn" data-act="sortbag">整理背包</button></div>
   <div class="row2" style="margin:0 0 6px"><button class="btn ${a(0)?'hot':''}" data-act="sellall" data-q="0" ${town?'':'disabled'}>${a(0)?'再按一次確定':'一鍵賣普通裝備'}</button><button class="btn ${a(1)?'hot':''}" data-act="sellall" data-q="1" ${town?'':'disabled'}>${a(1)?'再按一次確定':'賣普通＋魔法'}</button></div>
@@ -1107,10 +1125,11 @@ function hud(force,dt=0){ hudT-=dt; if(!force&&hudT>0) return; hudT=.15; if(!ME)
   $('#mpF').style.width=(c.mp/c.maxMP*100)+'%'; $('#mpT').textContent=c.mp+' / '+c.maxMP;
   $('#xpF').style.width=(c.exp/c.need*100)+'%'; $('#gold').textContent=c.gold.toLocaleString();
   $('#cPot').textContent=(c.inv.pot||0)+(c.inv.big?'+'+c.inv.big:''); $('#cRet').textContent='×'+c.inv.ret;
-  SKILLS[c.cls].forEach((k,i)=>{ const b=$('#bS'+i),lock=c.lv<k.lv,rem=Math.max(0,cdEnd[i]-now), ic=CLSI[c.cls]*3+i, ue=b.querySelector('.ski'); if(ue&&ue.dataset.i!=String(ic)){ ue.dataset.i=ic; setUic(ue,ic); } b.title=k.n;
+  for(let i=3;i<5;i++) $('#bS'+i).hidden=!c.adv;
+  skillsOf(c).forEach((k,i)=>{ const b=$('#bS'+i),lock=c.lv<k.lv,rem=Math.max(0,cdEnd[i]-now), ic=i<3?CLSI[c.cls]*3+i:24+ADV_KEYS.indexOf(c.adv)*2+(i-3), ue=b.querySelector('.ski'); if(ue&&ue.dataset.i!=String(ic)){ ue.dataset.i=ic; setUic(ue,ic); } b.title=k.n;
     b.querySelector('.sn').textContent=k.n; b.querySelector('small').textContent=lock?`Lv.${k.lv}`:rem>0?rem.toFixed(1):k.mp+' MP';
     b.querySelector('.cdv').style.height=(lock?0:rem/k.cd*100)+'%'; b.classList.toggle('lock',lock); b.classList.toggle('ready',!lock&&rem<=0&&c.mp>=k.mp); });
-  $('#cQuest').textContent=QUESTS[c.mq]?(QUESTS[c.mq].type==='talk'?'回報':`${c.mqp}/${QUESTS[c.mq].n}`):'完成';
+  $('#cQuest').textContent=QUESTS[c.mq]?(QUESTS[c.mq].type==='talk'?'回報':`${c.mqp}/${QUESTS[c.mq].need}`):'完成';
   $('#bPot').classList.toggle('hot',c.hp<c.maxHP*.3&&c.hp>0);
   const bb=$('#bBag small'),lbl=c.pts>0?`點數 ${c.pts}`:'背包'; if(bb.textContent!==lbl){bb.textContent=lbl;bb.style.color=c.pts>0?'var(--gold)':'';}
   $('#online').textContent=players.size>1?`本圖 ${players.size} 人`:'';
