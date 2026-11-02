@@ -61,7 +61,7 @@ function onMsg(m){
     case 'who': openPanel('who',m.list); return;
     case 'quest': if(!m.silent) setTimeout(()=>openPanel('story',{title:m.n,text:m.story}),600); return;
     case 'qdone': onQuestDone(m); return;
-    case 'event': eclipse=m.on?{end:m.end-Date.now()+performance.now()}:null; if(m.on){ banner={t:4,a:'✦ 月蝕之夜 ✦',b:'怪物加倍・經驗 ×2・稀有掉寶提高'}; SFX.legend(); doShake(6,.5); } return;
+    case 'event': if(m.k!=='eclipse') return onWorldEvent(m); eclipse=m.on?{end:m.end-Date.now()+performance.now()}:null; if(m.on){ banner={t:4,a:'✦ 月蝕之夜 ✦',b:'怪物加倍・經驗 ×2・稀有掉寶提高'}; SFX.legend(); doShake(6,.5); } return;
     case 'ench': SFX[m.ok?'ok':'boom'](); if(curPanel==='smith') openPanel('smith',{c:m.ok?'ok':'boom',t:m.msg}); addLog(m.msg); return;
   }
 }
@@ -122,7 +122,7 @@ function onSnapshot(s){
   const ms=new Set(), list=[];
   for(const a of s.m){ ms.add(a[0]); let e=ents.get(a[0]);
     if(!e){ e={id:a[0],k:a[1],x:a[2],y:a[3],rx:a[2],ry:a[3],boss:!!MT[a[1]].boss,hurt:0,kb:0,kbx:0,kby:0,lg:0,atkAnim:0,lgA:0}; ents.set(e.id,e); }
-    e.x=a[2]; e.y=a[3]; e.hp=a[4]; e.maxhp=a[5]; e.face=a[6]; e.dir=a[7]; e.stun=a[8]; e.tele=a[9]/10; list.push(e); }
+    e.x=a[2]; e.y=a[3]; e.hp=a[4]; e.maxhp=a[5]; e.face=a[6]; e.dir=a[7]; e.stun=a[8]; e.tele=a[9]/10; e.nm=a[10]||null; list.push(e); }
   for(const m of cur.mobs) if(!ms.has(m.id)) ents.delete(m.id);
   cur.mobs=list;
   if(s.l){ gone=new Map(loot); loot.clear();
@@ -197,7 +197,7 @@ function onMe(c){
 }
 
 /* ---------- telegraphs, ground loot, quest tracker ---------- */
-let eclipse=null, tgs=[], gone=new Map(), trackRect=null, ICONIMG=null; const loot=new Map(), cdEnd=[0,0,0];
+let invasion=null, wboss=false, eclipse=null, tgs=[], gone=new Map(), trackRect=null, ICONIMG=null; const loot=new Map(), cdEnd=[0,0,0];
 function lootList(){ return loot.values(); }
 function canPickLoot(L){ return !L.own||!ME||L.own.includes(ME.id)||now>L.ownEnd; }
 function lootIcon(L){ return L.it?iconIdx(L.it,ME?.cls):(INVI[L.k]??63); }
@@ -237,12 +237,20 @@ function drawTracker(){ if(!ME) return; const q=QUESTS[ME.mq],maxW=Math.min(220,
   else rows.push(['◆ 主線完成','#e8c46a']);
   if(ME.daily){ const left=ME.daily.list.filter(x=>!x.done); rows.push([left.length?`每日 ${3-left.length}/3・${left[0].d}（${left[0].p}/${left[0].n}）`:'每日任務完成 ✓',left.length?'#9fc4e0':'#7fe08a']); }
   if(eclipse){ const left=Math.max(0,(eclipse.end-performance.now())/1000); if(left<=0) eclipse=null; else rows.unshift([`✦ 月蝕之夜 ${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')}・經驗 ×2`,'#ff7a8a']); }
+  if(invasion){ const left=Math.max(0,(invasion.end-performance.now())/1000); rows.unshift([`⚔ 教團入侵・泉水耐久 ${invasion.hp}/100・${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')}`,invasion.hp>40?'#ffb070':'#ff5a4a']); }
+  if(wboss) rows.unshift(['🔥 卡爾薩殘火甦醒中（熔岩洞窟）','#ff9a3c']);
   const w=Math.min(maxW,Math.max(...rows.map(r=>ctx.measureText(r[0]).width)))+14,h=rows.length*15+8,x=6,y=30;
   ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(x,y,w,h); ctx.fillStyle='rgba(216,178,90,.7)'; ctx.fillRect(x,y,2,h);
   rows.forEach((r,i)=>{ ctx.fillStyle=r[1]; ctx.fillText(r[0],x+8,y+16+i*15); }); trackRect={x,y,w,h}; }
 function drawAura(e,X,Y){ const b=e.bf; if(b.iron>now){ ctx.strokeStyle=`rgba(120,180,255,${.5+.3*Math.sin(now*6)})`; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(X,Y,18,8,0,0,7); ctx.stroke(); ctx.beginPath(); ctx.ellipse(X,Y-28,16,28,0,0,7); ctx.stroke(); }
   if(b.haste>now){ ctx.fillStyle='rgba(127,224,138,.25)'; ctx.beginPath(); ctx.ellipse(X,Y,20,9,0,0,7); ctx.fill(); if(Math.random()<.3) part(X+cam.x+rnd(-10,10),Y+cam.y-rnd(0,40),{vx:-e.dir*60,vy:0,g:0,c:'#b8ffb0',life:.3,s:2}); }
   if(b.shadow>now&&Math.random()<.4) part(X+cam.x+rnd(-10,10),Y+cam.y-rnd(0,40),{vx:rnd(-10,10),vy:rnd(-30,-10),g:0,c:pick(['#3a2a5a','#8a4cff']),life:.5,s:3}); }
+function onWorldEvent(m){
+  if(m.k==='invasion'){ const was=invasion; invasion=m.on?{end:m.end-Date.now()+performance.now(),hp:m.hp}:null;
+    if(m.on&&!was){ banner={t:4,a:'⚔ 灰燼教團入侵 ⚔',b:'回晨霧村守住治癒之泉！'}; SFX.boom(); doShake(8,.5); }
+    else if(m.on&&was&&m.hp<was.hp){ SFX.hurt(); if(cur?.id==='village') doShake(4,.2); }
+    else if(!m.on){ banner={t:4,a:m.won?'晨霧村守住了！':'治癒之泉被污染了……',b:m.won?'獎勵已發放':'明天教團還會再來'}; m.won?SFX.legend():SFX.die(); } }
+  if(m.k==='wb'){ wboss=m.on; if(m.on){ banner={t:4.5,a:'🔥 卡爾薩殘火 甦醒',b:'熔岩洞窟的世界 Boss・血量 5 倍'}; SFX.boom(); doShake(10,.6); } } }
 function onQuestDone(m){
   SFX.ok(); addLine(`<div class="l-sys"><b>[任務完成]</b> ${esc(m.n)}　${esc(m.r||'')}</div>`);
   if(m.daily){ toast(`每日任務完成：${m.n}`); return; }

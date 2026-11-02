@@ -12,10 +12,12 @@ const today = ()=>new Date(Date.now()+8*3600e3).toISOString().slice(0,10); // Ta
 export class World {
   constructor(store){
     this.store = store; this.maps = {}; this.players = new Map(); this.byName = new Map();
-    this.nextId = 1; this.parties = new Map(); this.clans = new Map(); this.trades = new Map(); this.rankCache = null; this.rankT = 0; this.eclipse = {on:false,end:0,warned:false,forced:false}; this.evT = 0;
+    this.nextId = 1; this.parties = new Map(); this.clans = new Map(); this.trades = new Map(); this.rankCache = null; this.rankT = 0; this.eclipse = {on:false,end:0,warned:false,forced:false}; this.inv = null; this.invDay=''; this.wb = null; this.wbWeek=''; this.evT = 0;
     for(const id of Object.keys(MAPDEF)) this.maps[id] = this.makeInstance(id);
   }
   async init(){ for(const c of await this.store.listClans()) this.clans.set(c.name,c); this.timer = setInterval(()=>this.tick(), TICK);
+    if(+process.env.INVADE_IN>0) setTimeout(()=>this.startInvasion(Date.now()+10*60e3),process.env.INVADE_IN*60e3);
+    if(+process.env.WB_IN>0) setTimeout(()=>this.startWorldBoss(),process.env.WB_IN*60e3);
     if(+process.env.ECLIPSE_MIN>0) this.setEclipse(true,Date.now()+process.env.ECLIPSE_MIN*60e3,true); }
   makeInstance(id){ const m = buildMap(id); return { id, m, def:MAPDEF[id], players:new Set(), mobs:new Map(), spawnT:0, bossT:0, ev:[], tg:[], loot:new Map(), lootDirty:true }; }
 
@@ -37,6 +39,8 @@ export class World {
     this.enterMap(P, mapId, MAPDEF[c.map] ? {x:c.x,y:c.y} : null);
     this.sysTo(P, `歡迎來到銀月大陸，${P.name}。目前在線 ${this.players.size} 人。`);
     if(this.eclipse.on) this.send(P,{t:'event',k:'eclipse',on:true,end:this.eclipse.end});
+    if(this.inv) this.send(P,{t:'event',k:'invasion',on:true,end:this.inv.end,hp:this.inv.hp});
+    if(this.wb) this.send(P,{t:'event',k:'wb',on:true});
     if(c.mq<QUESTS.length) this.send(P,{t:'quest',story:QUESTS[c.mq].story,n:QUESTS[c.mq].n,silent:c.mq>0});
     if(c.clan){ const cl=this.clans.get(c.clan); if(cl&&cl.notice) this.sysTo(P,`【血盟公告】${cl.notice}`); this.clanBroadcast(c.clan,{t:'chat',ch:'clan',from:'系統',msg:`${P.name} 上線了。`}); }
     return P;
@@ -96,16 +100,17 @@ export class World {
     this.broadcast({t:'event',k:'eclipse',on,end:E.end});
     this.broadcast({t:'chat',ch:'sys',from:'系統',msg:on?'✦ 月蝕之夜降臨 ✦ 月痕碎片在發熱，怪物從四面八方湧出。30 分鐘內經驗 ×2、稀有掉寶提高！':'月蝕結束了，月光回到大地。'}); }
   tick(){
-    const dt=TICK/1000; this.evT-=dt; if(this.evT<=0){ this.evT=1; this.eclipseCheck(); }
+    const dt=TICK/1000; this.evT-=dt; if(this.evT<=0){ this.evT=1; this.eclipseCheck(); this.invasionCheck(); this.worldBossCheck(); }
     for(const inst of Object.values(this.maps)){
       const active = inst.players.size>0;
       for(const P of inst.players) this.updatePlayer(P,dt);
+      if(inst.id==='village'&&this.inv){ this.updateMobs(inst,dt); this.updateTele(inst,dt); this.invasionTick(inst,dt); }
       if(inst.def.mobs){
         if(active){ this.updateMobs(inst,dt); this.updateTele(inst,dt); }
         this.updateLoot(inst);
         inst.spawnT-=dt; inst.bossT-=dt;
         if(inst.spawnT<=0){ const ec=this.eclipse.on, want=ec?Math.min(120,(MOB_COUNT+inst.players.size*2)*2):Math.min(70,MOB_COUNT+inst.players.size*2); inst.spawnT=ec?.25:want>MOB_COUNT?1:2.5; let n=0; for(const m of inst.mobs.values()) if(!m.boss) n++; if(n<want) this.spawnRandom(inst);
-          if(inst.bossT<=0 && ![...inst.mobs.values()].some(m=>m.boss)){ this.spawnBoss(inst); if(active) this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'系統',msg:`遠方傳來低沉的咆哮……${MT[inst.def.boss].n}出現了。`}); } }
+          if(inst.bossT<=0 && !(this.wb&&inst.id==='cave') && ![...inst.mobs.values()].some(m=>m.boss)){ this.spawnBoss(inst); if(active) this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'系統',msg:`遠方傳來低沉的咆哮……${MT[inst.def.boss].n}出現了。`}); } }
       }
       if(active) this.snapshot(inst);
       inst.ev=[];
@@ -126,7 +131,7 @@ export class World {
   snapshot(inst){
     const p=[],m=[];
     for(const P of inst.players) p.push([P.id,P.name,P.c.cls,P.c.g,P.x,P.y,Math.round(P.c.hp/P.stats.maxHP*100),P.c.lv,(P.c.lawful<0?1:0)|(P.purple>0?2:0)|(P.dead>0?4:0)|(P.pk?8:0),P.c.clan||'',P.face,P.c.eq.w.en|0]);
-    for(const o of inst.mobs.values()) m.push([o.id,o.k,o.x,o.y,o.hp,o.maxhp,o.face,o.dir,o.stun>0?1:0,o.tele>0?Math.round(o.tele*10):0]);
+    for(const o of inst.mobs.values()) m.push([o.id,o.k,o.x,o.y,o.hp,o.maxhp,o.face,o.dir,o.stun>0?1:0,o.tele>0?Math.round(o.tele*10):0,o.nm||0]);
     const msg={t:'s',p,m,e:inst.ev};
     if(inst.lootDirty){ inst.lootDirty=false; const now=Date.now()/1000;
       msg.l=[...inst.loot.values()].map(L=>[L.id,L.x,L.y,L.it?{s:L.it.s,t:L.it.t,q:L.it.q,leg:L.it.leg?1:0}:{k:L.k},L.q,L.name,L.own?[...L.own]:0,Math.max(0,Math.round(L.ownT-now))]); }
@@ -234,6 +239,8 @@ export class World {
     // who gets credit: top damage dealer (and their party)
     let best=null,bd=0; for(const [pid,d] of m.dmg){ const P=this.players.get(pid); if(P&&P.inst===inst&&d>bd){bd=d;best=P;} }
     if(m.boss){ inst.bossT=BOSS_RESPAWN; inst.tg=inst.tg.filter(g=>g.by!==m.id); }
+    if(m.inv) this.invasionKill(inst,m);
+    if(m.wb) return this.worldBossKill(inst,m);
     if(m.summon||!best) return;
     const group = best.party ? [...best.party.members].filter(o=>o.inst===inst&&o.dead<=0&&Math.hypot(o.x-m.x,o.y-m.y)<16) : [best];
     const bonus = 1+.1*(group.length-1), totalExp=Math.round(t.exp*bonus*(this.eclipse.on?2:1)), lvSum=group.reduce((a,o)=>a+o.c.lv,0);
@@ -280,11 +287,11 @@ export class World {
     if(L.q>=3) this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`✦ ${P.name} 獲得了傳說${L.it.s==='w'?'武器':'飾品'}「${itemBaseName(L.it,c.cls)}」！`});
     if(P.party) for(const o of P.party.members) if(o!==P&&o.inst===inst) this.logTo(o,`${P.name} 撿到 ${nm}`); }
   // ---------- telegraphed attacks (red circles) ----------
-  tele(inst,m,x,y,r,delay,mult,kind){ inst.tg.push({x,y,r,t:delay,by:m.id,k:m.k,mult,kind}); this.ev(inst,'tg',x,y,r,delay,kind); }
+  tele(inst,m,x,y,r,delay,mult,kind){ inst.tg.push({x,y,r,t:delay,by:m.id,k:m.k,mult,kind,atkMul:m.atkMul||1}); this.ev(inst,'tg',x,y,r,delay,kind); }
   updateTele(inst,dt){ if(!inst.tg.length) return; const keep=[];
     for(const g of inst.tg){ g.t-=dt; if(g.t>0){ keep.push(g); continue; } const t=MT[g.k];
       this.ev(inst,'tb',g.x,g.y,g.r,g.kind);
-      for(const P of inst.players) if(P.dead<=0&&Math.hypot(P.x-g.x,P.y-g.y)<=g.r+.3){ const a=t.atk*g.mult; this.hurtPlayer(P,Math.max(Math.ceil(a*.3),Math.round(a*rnd(.9,1.1))-P.stats.def),t.n); } }
+      for(const P of inst.players) if(P.dead<=0&&Math.hypot(P.x-g.x,P.y-g.y)<=g.r+.3){ const a=t.atk*g.mult*(g.atkMul||1); this.hurtPlayer(P,Math.max(Math.ceil(a*.3),Math.round(a*rnd(.9,1.1))-P.stats.def),t.n); } }
     inst.tg=keep; }
   bossAI(inst,m,T,dt){ const t=MT[m.k], pct=m.hp/m.maxhp;
     if(m.tele>0){ m.tele-=dt; return true; } // channelling: stand still
@@ -301,6 +308,74 @@ export class World {
         for(const P of ps) this.tele(inst,m,P.x,P.y,1.5,1.5,1.4,'fire'); for(let i=0;i<(m.enr?7:4);i++) this.tele(inst,m,m.x+ri(-5,5),m.y+ri(-5,5),1.5,1.2+Math.random()*.8,1.4,'fire'); m.tele=.6; return true; } }
     if(m.slamT<=0&&dist(m,T)<=4){ m.slamT=rnd(5.5,7.5); this.tele(inst,m,m.x,m.y,2.6,1.1,1.7,'slam'); this.ev(inst,'sl',m.id); m.tele=1.1; return true; }
     return false; }
+  // ---------- 灰燼教團入侵晨霧村: once a day at a random time 19:00–23:00 Taipei ----------
+  invasionCheck(){ const t=new Date(Date.now()+8*3600e3), day=t.toISOString().slice(0,10);
+    if(this.inv||this.invDay===day) return;
+    const R=Math.abs([...day].reduce((a,c)=>a*31+c.charCodeAt(0),17))%240, at=19*60+R, mins=t.getUTCHours()*60+t.getUTCMinutes();
+    if(mins===at-5&&!this.invWarned){ this.invWarned=day; this.broadcast({t:'chat',ch:'sys',from:'系統',msg:'晨霧村的鐘聲響了！灰燼教團將在 5 分鐘後攻打村莊，冒險者們快回村守住治癒之泉！'}); }
+    if(mins>=at&&mins<at+10){ this.invDay=day; this.startInvasion(Date.now()+(at+10-mins)*60e3); } }
+  startInvasion(end){ if(this.inv) return; this.inv={end,hp:100,wave:0,waveT:3,contrib:new Map(),mobs:new Set()};
+    this.broadcast({t:'event',k:'invasion',on:true,end,hp:100});
+    this.broadcast({t:'chat',ch:'sys',from:'系統',msg:'⚔ 灰燼教團入侵晨霧村！守住治癒之泉 10 分鐘，怪物碰到泉水會讓村莊耐久下降。'}); }
+  invasionTick(inst,dt){ const I=this.inv; if(!I) return;
+    if(Date.now()>I.end) return this.endInvasion(inst,I.hp>0);
+    I.waveT-=dt; if(I.waveT<=0&&I.wave<6){ I.waveT=I.wave===4?45:80; I.wave++; this.spawnWave(inst,I.wave); }
+    // invaders that reach the fountain damage the village and vanish
+    const H=inst.m.heal; for(const m of [...inst.mobs.values()]){ if(!m.inv) continue;
+      if(Math.abs(m.x-(H.x+.5))<=1.6&&Math.abs(m.y-(H.y+.5))<=1.6){ inst.mobs.delete(m.id); this.ev(inst,'k',m.id); I.hp=Math.max(0,I.hp-(m.nm?25:6));
+        this.broadcast({t:'event',k:'invasion',on:true,end:I.end,hp:I.hp});
+        if(I.hp<=0) return this.endInvasion(inst,false); } }
+    if(I.wave>=6&&![...inst.mobs.values()].some(m=>m.inv)) this.endInvasion(inst,true); }
+  spawnWave(inst,w){ const ps=[...inst.players].filter(P=>P.dead<=0);
+    const avg=ps.length?ps.reduce((a,P)=>a+P.c.lv,0)/ps.length:5;
+    const pool=Object.keys(MT).filter(k=>!MT[k].boss&&MT[k].lv<=avg+(w<=3?0:2)&&MT[k].lv>=avg-(w<=3?9:6)); if(!pool.length) pool.push('goblin','wolf');
+    const n=w===6?Math.min(12,4+ps.length*2):Math.min(24,4+w+ps.length*2), M=inst.m, P0=M.portals[0];
+    const spawnOne=(k,elite)=>{ for(let i=0;i<20;i++){ const x=P0.x+ri(-3,3),y=P0.y+ri(-3,1); if(x<0||y<0||x>=M.W||y>=M.H||M.blk[y*M.W+x]||this.occupied(inst,x,y)) continue;
+      const m=this.spawnMob(inst,k,x,y); m.inv=true; m.goal={x:M.heal.x,y:M.heal.y}; m.hx=x; m.hy=y;
+      const sc=1+(w-1)*.12; m.maxhp=m.hp=Math.round(MT[k].hp*sc*(elite?12:1)); m.atkMul=sc*(elite?1.6:1); if(elite){ m.nm='灰燼大祭司'; m.boss=false; }
+      this.inv.mobs.add(m.id); return m; } };
+    for(let i=0;i<n;i++) spawnOne(w>=4&&Math.random()<.4&&MT.cultist.lv<=avg+6?'cultist':pick(pool));
+    if(w===6){ spawnOne('cultist',true); this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'灰燼大祭司',msg:'「把月痕交出來，這座村子就不必燒掉。」'}); }
+    else this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'系統',msg:`第 ${w} 波敵人從傳送陣湧進來了！`}); }
+  invasionKill(inst,m){ const I=this.inv; if(!I) return; for(const [pid,d] of m.dmg) I.contrib.set(pid,(I.contrib.get(pid)||0)+d+(m.nm?500:20)); }
+  endInvasion(inst,won){ const I=this.inv; if(!I) return; this.inv=null;
+    for(const m of [...inst.mobs.values()]) if(m.inv){ inst.mobs.delete(m.id); this.ev(inst,'k',m.id); }
+    inst.tg=[];
+    this.broadcast({t:'event',k:'invasion',on:false,won});
+    if(!won){ this.broadcast({t:'chat',ch:'sys',from:'系統',msg:'治癒之泉被教團污染了……村莊守備失敗。明天他們還會再來。'}); return; }
+    const ranked=[...I.contrib.entries()].map(([pid,v])=>[this.players.get(pid),v]).filter(([P])=>P).sort((a,b)=>b[1]-a[1]);
+    const tot=ranked.reduce((a,[,v])=>a+v,0)||1;
+    ranked.forEach(([P,v],i)=>{ const c=P.c, share=v/tot, g=Math.round(1500+8000*share+c.lv*60);
+      c.gold+=g; c.inv.big=(c.inv.big||0)+3; const ws=i<3?2:1; c.inv.ws=(c.inv.ws||0)+ws; c.inv.as=(c.inv.as||0)+1; this.gainExp(P,Math.round(expNeed(c.lv)*.25)); this.me(P);
+      this.send(P,{t:'qdone',daily:1,n:`守住晨霧村（貢獻第 ${i+1} 名）`,r:`金幣 +${g}、武器強化卷軸 ×${ws}、防具強化卷軸 ×1、強力藥水 ×3、經驗`}); });
+    this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`晨霧村守住了！貢獻前三名：${ranked.slice(0,3).map(([P])=>P.name).join('、')||'（無）'}`}); }
+
+  // ---------- 卡爾薩殘火: world boss every Sunday 21:00 Taipei ----------
+  worldBossCheck(){ const t=new Date(Date.now()+8*3600e3), wk=t.toISOString().slice(0,10);
+    if(t.getUTCDay()===0&&t.getUTCHours()===20&&t.getUTCMinutes()===50&&this.wbWarned!==wk){ this.wbWarned=wk; this.broadcast({t:'chat',ch:'sys',from:'系統',msg:'熔岩洞窟深處傳來心跳聲……10 分鐘後「卡爾薩殘火」甦醒，請各血盟集結！'}); }
+    if(t.getUTCDay()===0&&t.getUTCHours()===21&&t.getUTCMinutes()<30&&this.wbWeek!==wk&&!this.wb){ this.wbWeek=wk; this.startWorldBoss(); } }
+  startWorldBoss(){ if(this.wb) return; const inst=this.maps.cave, b=inst.m.boss;
+    for(const m of [...inst.mobs.values()]) if(m.boss){ inst.mobs.delete(m.id); this.ev(inst,'k',m.id); }
+    const m=this.spawnMob(inst,'firelord',b.x,b.y); m.hp=m.maxhp=MT.firelord.hp*5; m.wb=true; m.nm='卡爾薩殘火'; m.atkMul=1.15;
+    this.wb={id:m.id,start:Date.now()};
+    this.broadcast({t:'event',k:'wb',on:true});
+    this.broadcast({t:'chat',ch:'sys',from:'卡爾薩殘火',msg:'「三百年……還不夠嗎？」熔岩洞窟的世界 Boss 甦醒了，血量是平常的 5 倍，需要多個隊伍合力！'}); }
+  worldBossKill(inst,m){ this.wb=null; inst.bossT=BOSS_RESPAWN;
+    const parts=[...m.dmg.entries()].map(([pid,d])=>[this.players.get(pid),d]).filter(([P])=>P&&P.inst===inst&&P.dead<=0);
+    const tot=parts.reduce((a,[,d])=>a+d,0)||1, owners=new Set(parts.map(([P])=>P.id));
+    const clans=new Map(); for(const [P,d] of parts){ const k=P.c.clan||'（無血盟）'; clans.set(k,(clans.get(k)||0)+d); }
+    const topClans=[...clans.entries()].sort((a,b)=>b[1]-a[1]);
+    for(const [P,d] of parts){ if(d/tot<.01) continue; const c=P.c; c.inv.ws=(c.inv.ws||0)+2; c.inv.as=(c.inv.as||0)+2; c.gold+=5000; c.bossKills=(c.bossKills||0)+1;
+      this.gainExp(P,MT.firelord.exp*3); this.questEv(P,'boss',null,1); this.questEv(P,'kill','firelord',1); this.me(P);
+      this.send(P,{t:'qdone',daily:1,n:'擊倒卡爾薩殘火',r:`傷害佔 ${Math.round(d/tot*100)}%・金幣 +5000、強化卷軸各 2、經驗`}); }
+    const top=topClans[0]&&topClans[0][0]!=='（無血盟）'?topClans[0][0]:null;
+    if(top) for(const [P] of parts) if(P.c.clan===top){ P.c.inv.ws=(P.c.inv.ws||0)+2; this.me(P); }
+    const by=parts.sort((a,b)=>b[1]-a[1])[0]?.[0];
+    if(by){ for(let i=0;i<3;i++) this.dropLoot(inst,m.x,m.y,{it:makeLegend(Math.random()<.75?'w':'n')},owners,by); if(Math.random()<.5) this.dropLoot(inst,m.x,m.y,{it:makeLegend('w')},owners,by);
+      for(let i=0;i<4;i++) this.dropLoot(inst,m.x,m.y,{it:makeItem(randomSlot(),4)},owners,by); this.dropLoot(inst,m.x,m.y,{k:'ws',n:3},owners,by); }
+    this.broadcast({t:'event',k:'wb',on:false});
+    this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`卡爾薩殘火熄滅了！血盟傷害排名：${topClans.slice(0,3).map(([k,d],i)=>`${i+1}. ${k}（${Math.round(d/tot*100)}%）`).join('　')}${top?`。「${top}」成員額外獲得武器強化卷軸 ×2！`:''}`}); }
+
   // ---------- quests ----------
   checkDaily(P){ const c=P.c,d=today(); if(!c.daily||c.daily.day!==d){ c.daily={day:d,list:dailyFor(d),bonus:false}; this.me(P); } }
   questEv(P,type,k,n){ const c=P.c; this.checkDaily(P);
@@ -356,12 +431,13 @@ export class World {
         if(t.ranged&&d<=t.ranged&&d>1){ if(m.cd<=0){ m.cd=1.6; this.face(m,T.x-m.x,T.y-m.y); this.ev(inst,'a',m.id,T.id,m.k==='cultist'?'mfire':'spore'); this.mobHit(m,T); } }
         else if(d<=1){ this.face(m,T.x-m.x,T.y-m.y); if(m.cd<=0){ m.cd=(m.boss?1.4:1.15)*(m.enr?.7:1); this.ev(inst,'a',m.id,T.id,'claw'); this.mobHit(m,T); } }
         else if(m.cd<=0){ m.cd=t.spd; this.stepToward(inst,m,T.x,T.y); }
-      } else if(m.cd<=0){ m.cd=rnd(1.2,3); if(!m.boss){ const [dx,dy]=pick(DIRS),nx=m.x+dx,ny=m.y+dy;
+      } else if(m.goal&&m.cd<=0){ m.cd=t.spd; this.stepToward(inst,m,m.goal.x,m.goal.y); }
+      else if(m.cd<=0){ m.cd=rnd(1.2,3); if(!m.boss){ const [dx,dy]=pick(DIRS),nx=m.x+dx,ny=m.y+dy;
         if(!inst.m.blk[ny*inst.m.W+nx]&&!this.occupied(inst,nx,ny)&&Math.abs(nx-m.hx)<=4&&Math.abs(ny-m.hy)<=4){ this.face(m,dx,dy); m.x=nx; m.y=ny; } } }
     }
   }
   mobHit(m,T){ const t=MT[m.k]; if(Math.random()<this.dodgeOf(T)){ this.ev(T.inst,'d',T.id,0,2); return; }
-    const atk=t.atk*(m.enr?1.4:1); this.hurtPlayer(T,Math.max(Math.ceil(atk*.3),Math.round(atk*rnd(.8,1.2))-T.stats.def),t.n); }
+    const atk=t.atk*(m.enr?1.4:1)*(m.atkMul||1); this.hurtPlayer(T,Math.max(Math.ceil(atk*.3),Math.round(atk*rnd(.8,1.2))-T.stats.def),t.n); }
   stepToward(inst,m,tx,ty){ let best=null,bd=1e9; const M=inst.m;
     for(const [dx,dy] of DIRS){ const nx=m.x+dx,ny=m.y+dy; if(nx<0||ny<0||nx>=M.W||ny>=M.H||M.blk[ny*M.W+nx]||this.occupied(inst,nx,ny,m)) continue;
       if(dx&&dy&&(M.blk[m.y*M.W+m.x+dx]||M.blk[(m.y+dy)*M.W+m.x])) continue; const d=Math.hypot(nx-tx,ny-ty); if(d<bd){bd=d;best=[nx,ny];} }
@@ -432,6 +508,8 @@ export class World {
       if(cmd==='tp'&&MAPDEF[arg]){ const b=this.maps[arg].m.boss; this.enterMap(P,arg,arg2==='boss'&&b?{x:b.x+3,y:b.y+3}:null); }
       if(cmd==='drop'){ const q=arg|0; this.dropLoot(P.inst,P.x+1,P.y+1,q===3?{it:makeLegend('w')}:q?{it:Object.assign(makeItem('h',3),{q,bon:{str:2}})}:{k:'pot'},new Set([P.id]),P); }
       if(cmd==='eclipse'){ if(arg==='off') this.setEclipse(false); else this.setEclipse(true,Date.now()+(+arg||30)*60e3,true); }
+      if(cmd==='invade') this.startInvasion(Date.now()+(+arg||10)*60e3);
+      if(cmd==='wb') this.startWorldBoss();
       if(cmd==='god'){ c.hp=P.stats.maxHP=99999; }
       return; }
     const now=Date.now(); if(now-P.chatT<700) return this.logTo(P,'說話太快了。'); P.chatT=now;

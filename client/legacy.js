@@ -329,9 +329,9 @@ function drawMob(m,X,Y){const t=MT[m.k],s=mobSpr(m.k),mv=Math.abs(m.x-m.rx)+Math
   if(m.tele>0){const p=1-m.tele/1.1;ctx.strokeStyle=`rgba(255,60,40,${.4+p*.5})`;ctx.fillStyle=`rgba(255,40,20,${.1+p*.2})`;ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(X,Y,HW*2.6*p,HH*2.6*p,0,0,7);ctx.fill();ctx.stroke();}
   let h2=drawMobArt(m,X,Y,kx,ky,bob,sx,sy);if(h2){h=h2;}else{ctx.save();ctx.translate(X+kx,Y+ky+bob+2);if(m.dir<0)ctx.scale(-1,1);ctx.scale(sx,sy);ctx.drawImage(m.hurt>0?s.w:s.n,-w/2,-h);ctx.restore();}
   if(m.stun>0){for(let i=0;i<3;i++){const a=now*5+i*2.1;ctx.fillStyle='#ffd84a';ctx.fillRect(X+Math.cos(a)*10-2,Y-h-6+Math.sin(a)*3,4,4);}}
-  if(m.hp<m.maxhp||myTarget()===m||m.boss){const bw=m.boss?70:28,bx=X-bw/2,by=Y-h-8+(m.k=='bat'?-12:0);
+  if(m.hp<m.maxhp||myTarget()===m||m.boss||m.nm){const bw=m.boss?(m.nm?110:70):m.nm?50:28,bx=X-bw/2,by=Y-h-8+(m.k=='bat'?-12:0);
     ctx.fillStyle=O;ctx.fillRect(bx-1,by-1,bw+2,5);ctx.fillStyle='#3a0c0a';ctx.fillRect(bx,by,bw,3);ctx.fillStyle=m.boss?'#ff5a2a':'#d84a3a';ctx.fillRect(bx,by,bw*Math.max(0,m.hp/m.maxhp),3);
-    label((m.boss?'【BOSS】':'')+t.n+' Lv.'+t.lv,X,by-4,m.boss?'#ffb070':t.lv>(ME?ME.lv:1)+3?'#ff8a7a':'#e4dac0');}}
+    label(m.nm?(m.boss?'【世界BOSS】':'【精英】')+m.nm:(m.boss?'【BOSS】':'')+t.n+' Lv.'+t.lv,X,by-4,m.nm?'#ff7a5a':m.boss?'#ffb070':t.lv>(ME?ME.lv:1)+3?'#ff8a7a':'#e4dac0');}}
 function label(txt,X,Y,col){ctx.font='11px '+FONT;ctx.textAlign='center';ctx.fillStyle='rgba(0,0,0,.8)';ctx.fillText(txt,X+1,Y+1);ctx.fillStyle=col||'#ffe7a3';ctx.fillText(txt,X,Y);}
 function drawItem(it){const o=it.o;
   if(it.t==4&&o.bf){const X=Math.round(fx(o)-cam.x),Y=Math.round(fy(o)-cam.y);drawAura(o,X,Y);if(o.bf.shadow>now){ctx.globalAlpha=.5;drawPlayer(o,X,Y);ctx.globalAlpha=1;return;}}

@@ -69,5 +69,20 @@ for(const [map,k] of [['forest','treant'],['waste','colossus'],['cave','firelord
   const n=[...F.mobs.values()].filter(m=>!m.boss).length; ok(n>70,`eclipse doubles mobs (${n})`);
   const e0=E.c.exp+E.c.lv*1e6; const m=W.spawnMob(F,'wolf',11,10); m.dmg.set(E.id,1); const lv0=E.c.lv,x0=E.c.exp; W.killMob(F,m); ok(E.c.lv>lv0||E.c.exp-x0===MT.wolf.exp*2,`eclipse doubles exp (+${E.c.exp-x0})`);
   W.eclipse.end=Date.now()-1; W.eclipseCheck(); ok(!W.eclipse.on,'eclipse ends on time'); }
+// 灰燼教團入侵
+{ const V=W.maps.village, A=await mk('守村','knight',12); W.enterMap(A,'village',{x:15,y:14}); A.c.hp=1e6;
+  W.startInvasion(Date.now()+600e3); ok(msgs('守村','event').some(m=>m.k==='invasion'&&m.on),'invasion start sent');
+  for(let i=0;i<40;i++){ W.tick(); A.c.hp=1e6; A.dead=0; } const inv=[...V.mobs.values()].filter(m=>m.inv); ok(inv.length>0,`invaders spawned in village (${inv.length})`);
+  ok(inv.every(m=>m.goal),'invaders march to the fountain');
+  const m0=inv[0]; V.mobs.forEach(m=>{ if(m!==m0&&m.inv){ m.x=m0.hx; } }); m0.x=V.m.heal.x; m0.y=V.m.heal.y; W.invasionTick(V,.1); ok(W.inv.hp<100,`fountain loses durability (${W.inv.hp})`);
+  W.handle(A,{t:'pk',on:true}); const B=await mk('路人','ranger',12); W.enterMap(B,'village',{x:16,y:14}); W.handle(A,{t:'attack',id:B.id}); ok(A.target===null,'village still blocks PK during invasion');
+  const g0=A.c.gold; W.inv.wave=6; for(const m of [...V.mobs.values()]) if(m.inv){ m.dmg.set(A.id,100); W.killMob(V,m); } W.invasionTick(V,.1);
+  ok(!W.inv&&A.c.gold>g0,`invasion won pays contributors (+${A.c.gold-g0} gold)`); ok(V.mobs.size===0,'village cleared after invasion'); }
+// 卡爾薩殘火
+{ const C=W.maps.cave, A=await mk('打王','mage',30); W.enterMap(A,'cave',{x:C.m.boss.x+2,y:C.m.boss.y}); C.loot.clear();
+  W.startWorldBoss(); const b=[...C.mobs.values()].find(m=>m.wb); ok(b&&b.maxhp===MT.firelord.hp*5,'world boss has 5x HP');
+  for(let i=0;i<30;i++){ C.bossT=0; C.spawnT=0; W.tick(); } ok([...C.mobs.values()].filter(m=>m.boss).length===1,'normal boss does not spawn during world boss');
+  const ws0=A.c.inv.ws; b.dmg.set(A.id,b.maxhp); W.killMob(C,b); const leg=[...C.loot.values()].filter(L=>L.q===3).length;
+  ok(!W.wb&&leg>=3,`world boss drops ${leg} legendaries`); ok(A.c.inv.ws>ws0,'participants rewarded'); }
 ok(SKILLS.knight.length===3&&QUESTS.length>=10,'data tables present');
 console.log('done'); process.exit();
