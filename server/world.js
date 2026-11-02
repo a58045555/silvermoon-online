@@ -361,7 +361,7 @@ export class World {
     this.broadcast({t:'event',k:'wb',on:true});
     this.broadcast({t:'chat',ch:'sys',from:'卡爾薩殘火',msg:'「三百年……還不夠嗎？」熔岩洞窟的世界 Boss 甦醒了，血量是平常的 5 倍，需要多個隊伍合力！'}); }
   worldBossKill(inst,m){ this.wb=null; inst.bossT=BOSS_RESPAWN;
-    const parts=[...m.dmg.entries()].map(([pid,d])=>[this.players.get(pid),d]).filter(([P])=>P&&P.inst===inst&&P.dead<=0);
+    const parts=[...m.dmg.entries()].map(([pid,d])=>[this.players.get(pid),d]).filter(([P])=>P); // dead or respawned hitters still get credit
     const tot=parts.reduce((a,[,d])=>a+d,0)||1, owners=new Set(parts.map(([P])=>P.id));
     const clans=new Map(); for(const [P,d] of parts){ const k=P.c.clan||'（無血盟）'; clans.set(k,(clans.get(k)||0)+d); }
     const topClans=[...clans.entries()].sort((a,b)=>b[1]-a[1]);
