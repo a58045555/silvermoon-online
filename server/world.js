@@ -15,7 +15,8 @@ export class World {
     this.nextId = 1; this.parties = new Map(); this.clans = new Map(); this.trades = new Map(); this.rankCache = null; this.rankT = 0; this.eclipse = {on:false,end:0,warned:false,forced:false}; this.evT = 0;
     for(const id of Object.keys(MAPDEF)) this.maps[id] = this.makeInstance(id);
   }
-  async init(){ for(const c of await this.store.listClans()) this.clans.set(c.name,c); this.timer = setInterval(()=>this.tick(), TICK); }
+  async init(){ for(const c of await this.store.listClans()) this.clans.set(c.name,c); this.timer = setInterval(()=>this.tick(), TICK);
+    if(+process.env.ECLIPSE_MIN>0) this.setEclipse(true,Date.now()+process.env.ECLIPSE_MIN*60e3,true); }
   makeInstance(id){ const m = buildMap(id); return { id, m, def:MAPDEF[id], players:new Set(), mobs:new Map(), spawnT:0, bossT:0, ev:[], tg:[], loot:new Map(), lootDirty:true }; }
 
   // ---------- sessions ----------
