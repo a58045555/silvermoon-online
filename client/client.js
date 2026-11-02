@@ -117,14 +117,14 @@ function enterMapClient(id,x,y){
   closePanel(true);
   if(id==='village') setTimeout(onArriveVillage,800);
 }
-function mkPlayer(a){ const e={id:a[0],isPlayer:true,name:a[1],cls:a[2],g:a[3],x:a[4],y:a[5],rx:a[4],ry:a[5],hpPct:a[6],lv:a[7],flags:a[8],clan:a[9],face:a[10],dir:faceDir(a[10]),eq:{w:{en:a[11]}},walk:0,atkVis:0,lunge:0,hurt:0,dead:0};
+function mkPlayer(a){ const e={id:a[0],isPlayer:true,name:a[1],cls:a[2],g:a[3],x:a[4],y:a[5],rx:a[4],ry:a[5],hpPct:a[6],lv:a[7],flags:a[8],clan:a[9],title:a[12]||'',face:a[10],dir:faceDir(a[10]),eq:{w:{en:a[11]}},walk:0,atkVis:0,lunge:0,hurt:0,dead:0};
   players.set(e.id,e); ents.set(e.id,e); return e; }
 const faceDir=f=>[1,1,0,-1,-1,-1,0,1][f]||1;
 function onSnapshot(s){
   if(!cur) return;
   const seen=new Set();
   for(const a of s.p){ seen.add(a[0]); let e=players.get(a[0]); if(!e) e=mkPlayer(a);
-    const moved=a[4]!==e.x||a[5]!==e.y; e.x=a[4]; e.y=a[5]; e.hpPct=a[6]; e.lv=a[7]; e.flags=a[8]; e.clan=a[9]; if(a[10]!==e.face){e.face=a[10];const d=faceDir(a[10]);if(d)e.dir=d;} e.eq.w.en=a[11]; e.dead=a[8]&4?1:0; e.cls=a[2]; e.g=a[3];
+    const moved=a[4]!==e.x||a[5]!==e.y; e.x=a[4]; e.y=a[5]; e.hpPct=a[6]; e.lv=a[7]; e.flags=a[8]; e.clan=a[9]; e.title=a[12]||''; if(a[10]!==e.face){e.face=a[10];const d=faceDir(a[10]);if(d)e.dir=d;} e.eq.w.en=a[11]; e.dead=a[8]&4?1:0; e.cls=a[2]; e.g=a[3];
     if(Math.abs(e.x-e.rx)>4||Math.abs(e.y-e.ry)>4){e.rx=e.x;e.ry=e.y;} if(ME&&a[0]===ME.id) P=e; e.party=!!(ME&&ME.party&&ME.party.some(m=>m.id===e.id)); }
   for(const id of [...players.keys()]) if(!seen.has(id)){ players.delete(id); ents.delete(id); }
   const ms=new Set(), list=[];
@@ -208,7 +208,7 @@ function onMe(c){
   if(P){ P.eq.w.en=c.eq.w.en|0; }
   if(prevLv&&c.lv>prevLv){ SFX.level(); const L=skillsOf(c).find(k=>k.lv>prevLv&&k.lv<=c.lv); if(L){ banner={t:3.5,a:'學會新技能',b:`${L.n}：${L.d}`}; } }
   (c.cds||[]).forEach((v,i)=>cdEnd[i]=now+v);
-  if(curPanel&&['bag','shop','smith','social','quest','guard','auto'].includes(curPanel)) openPanel(curPanel,curArg,true);
+  if(curPanel&&['bag','shop','smith','social','quest','guard','auto','mentor','guild','ach'].includes(curPanel)) openPanel(curPanel,curArg,true);
   hud(true);
   $('#bPk').classList.toggle('hot',!!c.pk);
 }
@@ -280,7 +280,8 @@ function onWorldEvent(m){
     else if(!m.on){ banner={t:4,a:m.won?'晨霧村守住了！':'治癒之泉被污染了……',b:m.won?'獎勵已發放':'明天教團還會再來'}; m.won?SFX.legend():SFX.die(); } }
   if(m.k==='wb'){ wboss=m.on; if(m.on){ banner={t:4.5,a:'🔥 卡爾薩殘火 甦醒',b:'熔岩洞窟的世界 Boss・血量 5 倍'}; SFX.boom(); doShake(10,.6); } } }
 function onQuestDone(m){
-  SFX.ok(); addLine(`<div class="l-sys"><b>[任務完成]</b> ${esc(m.n)}　${esc(m.r||'')}</div>`);
+  SFX.ok(); addLine(`<div class="l-sys"><b>${m.note?'[公告]':'[任務完成]'}</b> ${esc(m.n)}　${esc(m.r||'')}</div>`);
+  if(m.note){ toast(m.n); return; }
   if(m.daily){ toast(`每日任務完成：${m.n}`); return; }
   banner={t:3.5,a:'任務完成',b:m.n}; P&&levelFx&&parts.push({type:'ring',x:fx(P),y:fy(P)-14,t:0,life:.6,r:TS*2,c:'232,196,106'});
   if(m.story) setTimeout(()=>openPanel('story',{title:m.next,text:m.story,reward:m.r}),1400); else if(curPanel==='guard') closePanel(true); }
@@ -308,7 +309,7 @@ function levelFx(p){ float(p,'LEVEL UP!','#ffd86b',true); const x=fx(p),y=fy(p);
 function drawPlayer(e,X,Y){
   drawHero(e,X,Y);
   const nameCol=e.flags&1?'#ff6a5a':e.flags&2?'#d08aff':e===P?'#ffe7a3':e.party?'#8fd8ff':'#e4dac0';
-  const top=Y-64; label(e.name,X,top,nameCol); if(e.clan) label('〈'+e.clan+'〉',X,top-13,'#9fc4e0');
+  const top=Y-64; label(e.name,X,top,nameCol); let tt=top-13; if(e.clan){ label('〈'+e.clan+'〉',X,tt,'#9fc4e0'); tt-=13; } if(e.title){ const A=ACH.find(a=>a.id===e.title); if(A) label('「'+A.t+'」',X,tt,'#e8c46a'); }
   if(e!==P&&e.hpPct<100){ ctx.fillStyle=O;ctx.fillRect(X-15,top+3,30,4);ctx.fillStyle='#c4433a';ctx.fillRect(X-14,top+4,28*Math.max(0,e.hpPct)/100,2); }
 }
 function updateFx(dt){
@@ -410,7 +411,7 @@ function joyThink(dt){ joyHold-=dt; joySendT-=dt; if(!P||P.dead||!cur){ return; 
     if(myTargetId) myTargetId=null; pendingAct=null; marker=null; }
   if(d!==joyDir||(d!=='0,0'&&joySendT<=0)){ const [dx,dy]=d.split(',').map(Number); send({t:'dir',dx,dy}); joyDir=d; joySendT=.5; } }
 function checkPending(){ if(!pendingAct||!P) return; const a=pendingAct, near=a.big?Math.max(Math.abs(P.x-a.x-.5),Math.abs(P.y-a.y-.5))<=1.6:cheb(P,a)<=1;
-  if(near&&Math.abs(P.rx-P.x)<.1&&Math.abs(P.ry-P.y)<.1){ pendingAct=null; if(a.act==='heal') send({t:'heal'}); else openPanel(a.act); } }
+  if(near&&Math.abs(P.rx-P.x)<.1&&Math.abs(P.ry-P.y)<.1){ pendingAct=null; if(a.act==='heal') send({t:'heal'}); else if(a.act.startsWith('mentor:')) openPanel('mentor',a.act.slice(7)); else openPanel(a.act); } }
 function usePot(){ if(!ME) return; if(ME.inv.pot) send({t:'use',k:'pot'}); else if(ME.inv.big) send({t:'use',k:'big'}); else addLog('紅色藥水用完了，回村找莉娜買。'); }
 $('#bPot').onclick=()=>{audioOn();usePot();};
 // nearest mob to fight (keeps the current target if it is still alive)
@@ -527,13 +528,14 @@ let toastT=null; function toast(msg){ const el=$('#toast'); el.textContent=msg; 
 
 /* ---------- panels ---------- */
 let curPanel=null, curArg=null;
-const PT={tele:'傳送師 露娜',auto:'掛機設定',quest:'任務',story:'故事',shop:'雜貨商 莉娜',smith:'鐵匠 巴爾克',bag:'角色',guard:'守衛 艾德',social:'社交',player:'玩家',clan:'血盟',rank:'排行榜',who:'在線玩家',ask:'邀請',trade:'交易'};
-function openPanel(k,arg,keep){ if(keep&&curPanel!==k) return; curPanel=k; curArg=arg; const body=$('#pBody'),st=keep?body.scrollTop:0; $('#pTitle').textContent=k==='player'&&arg?arg.name:PT[k]; body.innerHTML=panelHTML(k,arg); $('#overlay').hidden=false; body.scrollTop=st; }
+const MNAME={sylvie:'精靈遊俠 希爾薇',norn:'老學者 諾恩',vera:'黑暗妖精 薇拉'};
+const PT={guild:'冒險者公會 米亞',ach:'成就與稱號',tele:'傳送師 露娜',auto:'掛機設定',quest:'任務',story:'故事',shop:'雜貨商 莉娜',smith:'鐵匠 巴爾克',bag:'角色',guard:'守衛 艾德',social:'社交',player:'玩家',clan:'血盟',rank:'排行榜',who:'在線玩家',ask:'邀請',trade:'交易'};
+function openPanel(k,arg,keep){ if(keep&&curPanel!==k) return; curPanel=k; curArg=arg; const body=$('#pBody'),st=keep?body.scrollTop:0; $('#pTitle').textContent=k==='player'&&arg?arg.name:k==='mentor'?MNAME[arg]:PT[k]; body.innerHTML=panelHTML(k,arg); $('#overlay').hidden=false; body.scrollTop=st; }
 function closePanel(force){ if(curPanel==='trade'&&!force) send({t:'tcancel'}); $('#overlay').hidden=true; curPanel=null; armed=null; }
 $('#pClose').onclick=()=>closePanel();
 $('#overlay').addEventListener('pointerdown',e=>{if(e.target.id==='overlay')closePanel();});
 function panelHTML(k,arg){ const c=ME; if(!c) return '';
-  if(k==='guard'){ const q=QUESTS[c.mq]; const advB=advHTML(c); const qb=advB+(q&&q.type==='talk'?`<button class="btn wide on" data-act="qtalk">${c.mq===0?'「我來幫忙。」（接受主線）':'回報：'+esc(q.n)}</button>`:''); return qb+`<p>艾德：「現在村子裡不只你一個冒險者了。記住：村莊是安全區，出了傳送陣就可能被人攻擊。」</p>
+  if(k==='guard'){ const q=QUESTS[c.mq]; const advB=c.cls==='knight'?advHTML(c):(c.lv>=ADV_LV&&!c.adv?`<p class="ds">「想變得更強？去找${MENTOR[c.cls].who}，你的試煉在那邊。」</p>`:''); const qb=advB+(q&&q.type==='talk'?`<button class="btn wide on" data-act="qtalk">${c.mq===0?'「我來幫忙。」（接受主線）':'回報：'+esc(q.n)}</button>`:''); return qb+`<p>艾德：「現在村子裡不只你一個冒險者了。記住：村莊是安全區，出了傳送陣就可能被人攻擊。」</p>
     <table><tr><td>哭泣森林</td><td>Lv.1～10・Boss 腐木樹妖</td></tr><tr><td>骸骨荒原</td><td>Lv.10～18・Boss 白骨巨像</td></tr><tr><td>熔岩洞窟</td><td>Lv.18 以上・Boss 熾焰領主</td></tr></table>
     <p style="margin-top:10px">「Lv.${PK_MIN_LV} 以上可以開 PK。殺死沒有紅名的人會變紅名，紅名死掉會掉裝備。打怪可以慢慢把正義值洗回來。」</p><p class="ds">你的正義值：${c.lawful}</p>`; }
   if(k==='shop') return `<p>莉娜：「藥水多帶一點，外面的人跟怪一樣兇。」</p>`+SHOP.map(s=>`<div class="row"><div class="bcell" style="width:40px;flex:none">${icon(INVI[s.k])}</div><div class="info"><div class="nm">${s.n}</div><div class="ds">${s.d}・${s.p} 金幣・持有 ${c.inv[s.k]||0}</div></div>${s.q.map(q=>`<button class="btn" data-buy="${s.k}" data-q="${q}" ${c.gold<s.p*q?'disabled':''}>買 ${q}</button>`).join('')}</div>`).join('')+`<div class="sect">賣東西（背包 ${c.bag.length}/${BAGMAX}）</div>${sellTools(c)}<div class="sect">你的金幣：${c.gold.toLocaleString()}</div>`;
@@ -572,13 +574,27 @@ function panelHTML(k,arg){ const c=ME; if(!c) return '';
     <div class="row2"><button class="btn" data-pact="whisper">私訊</button>${c.clanLeader&&!p.clan?`<button class="btn" data-pact="cinvite">邀請入盟</button>`:''}</div>
     <p class="ds">要攻擊這個玩家，先在「社交」開啟 PK 模式。</p>`; }
   if(k==='auto') return autoPanelHTML();
+  if(k==='mentor'){ const mine=MENTOR[c.cls].npc===arg, L={
+      sylvie:['希爾薇：「森林在哭，你聽得到嗎？那些史萊姆以前不會攻擊人的。」','「精靈的箭只射該射的東西。」'],
+      norn:['諾恩：「月之塔倒下那年，我只搶出這一本書。」','「月痕不是傷口，是月亮留下的字。總有一天會有人讀懂。」'],
+      vera:['薇拉：「別盯著我看。黑暗妖精也是會救人的。」','「教團的人身上有灰燼的味道。聞到了就快跑……或者先下手。」']}[arg]||[''];
+    return `<p>${L[0]}</p><p class="ds">${L[1]}</p>`+(mine?advHTML(c):`<p class="ds">你的導師是${MENTOR[c.cls].who}。</p>`); }
+  if(k==='guild'){ const B=c.bounty; if(!B) return '<p>米亞：「稍等，我在整理委託單……」</p>';
+    const rows=B.list.map((b,i)=>{ const done=b.p>=b.need; return `<div class="gear"><div class="gname">${b.boss?'【Boss】':''}${MAPDEF[b.map].name}・${MT[b.k].n} ×${b.need}</div><div class="pbar"><i style="width:${Math.min(100,b.p/b.need*100)}%"></i></div><div class="row2" style="margin-top:6px"><span class="ds">${Math.min(b.p,b.need)}/${b.need}${b.boss?'・必得強化卷軸':'・30% 送強化卷軸'}</span>${done?`<button class="btn on" data-bclaim="${i}" ${cur.id==='village'?'':'disabled'}>領取報酬</button>`:`<button class="btn ${armed==='rr'+i?'hot':''}" data-breroll="${i}">${armed==='rr'+i?'確定（200 金幣）':'換一張'}</button>`}</div></div>`; }).join('');
+    return `<p>米亞：「歡迎來到冒險者公會晨霧村分部！委託會依你的等級挑，打完回來找我領錢～」</p>${rows||'<p class="ds">今天的委託都做完了，明天再來喔！</p>'}<p class="ds">今日完成 ${B.done}/${BOUNTY_DAY_MAX}・累計 ${c.bountyDone|0} 張・每天台灣時間午夜刷新</p>`; }
+  if(k==='ach'){ const got=ACH.filter(a=>c.ach[a.id]).length;
+    return `<p class="ds">已達成 ${got}/${ACH.length}。點「戴上」把稱號顯示在名字上方。</p>`+ACH.map(a=>{ const ok=c.ach[a.id], v=Math.min(achValue(c,a.k),a.v);
+      return `<div class="row"><div class="info"><div class="nm" style="color:${ok?'#e8c46a':'var(--dim)'}">${ok?'★':'☆'} ${a.t}</div><div class="ds">${a.d}${a.g?`・${a.g.toLocaleString()} 金幣`:''}${ok?'':`・${v.toLocaleString()}/${a.v.toLocaleString()}`}</div></div>${ok?`<button class="btn ${c.title===a.id?'on':''}" data-title="${c.title===a.id?'':a.id}">${c.title===a.id?'卸下':'戴上'}</button>`:''}</div>`; }).join(''); }
   if(k==='tele') return `<p>露娜：「月光照得到的地方，我都能送你去。」</p>`+TELE.map(T=>`<div class="row"><div class="info"><div class="nm">${T.boss?'【Boss】':''}${esc(T.n)}</div><div class="ds">${MAPDEF[T.map].name}・建議 ${T.lv}・${T.p.toLocaleString()} 金幣</div></div><button class="btn" data-tele="${T.k}" ${c.gold<T.p?'disabled':''}>傳送</button></div>`).join('')+`<div class="sect">你的金幣：${c.gold.toLocaleString()}</div>`;
   if(k==='story') return `<div class="sect">${esc(arg.title||'')}</div><div class="story">${esc(arg.text||'')}</div>${arg.reward?`<p class="ds">獲得：${esc(arg.reward)}</p>`:''}<button class="btn wide" data-act="qpanel">查看任務</button>`;
   if(k==='quest'){ const q=QUESTS[c.mq];
     const main=q?`<div class="sect">主線・${esc(q.n)}</div><div class="story">${esc(q.story)}</div><p><b>目標</b>：${esc(q.d)}</p>${q.type!=='talk'?`<div class="pbar"><i style="width:${Math.round(c.mqp/q.need*100)}%"></i></div><p class="ds">進度 ${c.mqp}/${q.need}</p>`:`<button class="btn wide on" data-act="goguard">${cur.id==='village'?'去找守衛艾德':'回村找守衛艾德'}</button>`}<p class="ds">章節 ${c.mq+1}/${QUESTS.length}</p>`:`<div class="sect">主線</div><p>你完成了「新月之誓」。北方的血月……就是另一個故事了。</p>`;
     const d=c.daily; const daily=d?`<div class="sect">每日任務（${d.day}，台灣時間午夜重置）</div>`+d.list.map(x=>`<div class="qrow ${x.done?'done':''}"><span>${x.done?'✓ ':''}${esc(x.d)}</span><span>${x.done?'完成':x.p+'/'+x.n}</span></div>`).join('')+`<p class="ds">每完成一個：經驗、金幣、強力藥水 ×2。三個都完成再送武器、防具強化卷軸各 1。</p>`:'';
     const sk=`<div class="sect">技能（快捷鍵 2～6）</div>`+skillsOf(c).map(k=>`<div class="qrow ${c.lv>=k.lv?'':'ds'}"><span><b>${k.n}</b>　${esc(k.d)}</span><span>${c.lv>=k.lv?k.mp+' MP':'Lv.'+k.lv}</span></div>`).join('');
-    return main+daily+sk; }
+    const M=MENTOR[c.cls], aq=c.advq; const adv=c.adv?'':c.lv<ADV_LV?`<div class="sect">轉職</div><p class="ds">Lv.${ADV_LV} 去找${M.who}接受轉職試煉。</p>`:`<div class="sect">轉職試煉</div><p>${!aq?'還沒接受試煉':aq.s===1?`收集「${M.token}」${aq.n}/${ADVQ_NEED}（${M.mobs.map(k=>MT[k].n).join('、')}）`:aq.s===2?'打倒白骨巨像':'試煉完成，回去選擇道路'}</p><button class="btn wide" data-act="gomentor">去找${M.who}</button>`;
+    const B=c.bounty, bt=B?`<div class="sect">公會委託（今日 ${B.done}/${BOUNTY_DAY_MAX}）</div>`+B.list.map(b=>`<div class="qrow ${b.p>=b.need?'done':''}"><span>${MT[b.k].n}（${MAPDEF[b.map].name}）</span><span>${b.p>=b.need?'可領取':b.p+'/'+b.need}</span></div>`).join('')+`<p class="ds">在晨霧村找公會接待米亞接委託、領報酬。</p>`:'';
+    const got=ACH.filter(a=>c.ach&&c.ach[a.id]).length; const ach=`<div class="sect">成就 ${got}/${ACH.length}</div><button class="btn wide" data-act="achp">查看成就與稱號</button>`;
+    return main+adv+daily+bt+ach+sk; }
   if(k==='ask') return `<p>${esc(arg.msg)}</p><div class="row2"><button class="btn" data-yes="1">接受</button><button class="btn ghost" data-no="1">拒絕</button></div>`;
   if(k==='clan'){ const cl=arg; if(!cl) return '<p>你沒有血盟。</p>';
     return `<p>盟主：${esc(cl.leader)}・成員 ${cl.members.length} 人</p>${cl.notice?`<p class="ds">公告：${esc(cl.notice)}</p>`:''}
@@ -604,7 +620,7 @@ $('#pBody').addEventListener('submit',e=>{ e.preventDefault(); const f=e.target.
   if(f==='tgold') send({t:'tput',gold:+v('#iTgold')||0}); });
 $('#pBody').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b||b.type==='submit'&&b.form) return; audioOn(); const D=b.dataset;
   if(D.tele){ closePanel(); return send({t:'tele',to:D.tele}); }
-  if(D.adv){ if(armed!=='adv'+D.adv){ armed='adv'+D.adv; return openPanel('guard'); } armed=null; send({t:'advance',to:D.adv}); return; }
+  if(D.adv){ if(armed!=='adv'+D.adv){ armed='adv'+D.adv; return openPanel(curPanel,curArg); } armed=null; send({t:'advance',to:D.adv}); return; }
   if(D.act==='autogo'){ closePanel(); if(cur.id==='village'){ addLog('先出村再開始掛機（掛機只在狩獵地圖運作）。'); } toggleAuto(!auto); return; }
   if(D.tgt!=null){ const id=MAPDEF[cur.id]?.mobs?cur.id:'forest',all=mapMobs(id); if(D.tgt==='*') delete AS.targets[id]; else { let t=AS.targets[id]?[...AS.targets[id]]:[...all]; t=t.includes(D.tgt)?t.filter(x=>x!==D.tgt):[...t,D.tgt]; if(!t.length||t.length===all.length) delete AS.targets[id]; else AS.targets[id]=t; } saveAS(); return openPanel('auto'); }
   if(D.as){ AS[D.as]=D.v==='tog'?(AS[D.as]?0:1):(isNaN(+D.v)?D.v:+D.v); saveAS(); return openPanel('auto'); }
@@ -614,6 +630,12 @@ $('#pBody').addEventListener('click',e=>{ const b=e.target.closest('button'); if
   if(D.act==='autoequip') return send({t:'autoequip'});
   if(D.lock!=null) return send({t:'lock',i:+D.lock});
   if(D.act==='qtalk') return send({t:'qtalk'});
+  if(D.act==='advstart') return send({t:'advstart'});
+  if(D.bclaim!=null) return send({t:'bclaim',i:+D.bclaim});
+  if(D.breroll!=null){ if(armed!=='rr'+D.breroll){ armed='rr'+D.breroll; return openPanel('guild'); } armed=null; return send({t:'breroll',i:+D.breroll}); }
+  if(D.title!=null) return send({t:'title',id:D.title});
+  if(D.act==='achp') return openPanel('ach');
+  if(D.act==='gomentor'){ closePanel(); const M=MENTOR[ME.cls]; if(cur.id!=='village') return send({t:'ret'}); const n=cur.npcs.find(n=>n.act===(M.npc==='guard'?'guard':'mentor:'+M.npc)); if(n){ pendingAct={x:n.x,y:n.y,act:n.act}; send({t:'move',x:n.x,y:n.y}); } return; }
   if(D.act==='qpanel') return openPanel('quest');
   if(D.act==='goguard'){ closePanel(); if(cur.id!=='village') return send({t:'ret'}); const n=cur.npcs.find(n=>n.act==='guard'); if(n){ pendingAct={x:n.x,y:n.y,act:'guard'}; send({t:'move',x:n.x,y:n.y}); } return; }
   if(D.act==='hide'){ hideOthers=!hideOthers; try{localStorage.setItem('sm_hide',hideOthers?'1':'0');}catch{} return openPanel('bag'); }
@@ -643,7 +665,11 @@ $('#pBody').addEventListener('click',e=>{ const b=e.target.closest('button'); if
   if(D.ench){ const sl=D.ench,it=ME.eq[sl],r=enchRate(sl==='w'?'w':'a',it.en); if(r<1&&armed!==sl){ armed=sl; return openPanel('smith'); } armed=null; return send({t:'enchant',s:sl}); }
 });
 function advHTML(c){ if(c.adv) return `<p class="ds">你已轉職為「${ADV[c.adv].n}」。</p>`; const opts=ADV_KEYS.filter(k=>ADV[k].base===c.cls);
-  if(c.lv<ADV_LV) return `<p class="ds">Lv.${ADV_LV} 可以找我轉職：${opts.map(k=>ADV[k].n).join(' 或 ')}。</p>`;
+  const M=MENTOR[c.cls], q=c.advq;
+  if(c.lv<ADV_LV) return `<div class="sect">轉職試煉</div><p class="ds">Lv.${ADV_LV} 可以接受轉職試煉，之後能成為：${opts.map(k=>ADV[k].n).join(' 或 ')}。</p>`;
+  if(!q) return `<div class="sect">轉職試煉</div><p>${M.talk}</p><p class="ds">試煉：① 收集 ${ADVQ_NEED} 個「${M.token}」（${M.mobs.map(k=>MT[k].n).join('、')}會掉）② 打倒白骨巨像 ③ 回來選擇道路（${ADV_COST.toLocaleString()} 金幣）</p><button class="btn wide on" data-act="advstart">接受轉職試煉</button>`;
+  if(q.s===1) return `<div class="sect">轉職試煉 ①</div><p>收集「${M.token}」：${M.mobs.map(k=>MT[k].n).join('、')}會掉。</p><div class="pbar"><i style="width:${q.n/ADVQ_NEED*100}%"></i></div><p class="ds">${q.n}/${ADVQ_NEED}</p>`;
+  if(q.s===2) return `<div class="sect">轉職試煉 ②</div><p>「東西夠了。最後一關：去骸骨荒原深處打倒白骨巨像。組隊也算數。」</p>`;
   return `<div class="sect">轉職（${ADV_COST.toLocaleString()} 金幣，選了就不能改）</div>`+opts.map(k=>{ const A=ADV[k]; return `<div class="gear"><div class="gname">${A.n}</div><div class="ds">${A.d}</div>${A.sk.map(s=>`<div class="ds">・<b>${s.n}</b>（Lv.${s.lv}）${s.d}</div>`).join('')}<button class="btn ${armed==='adv'+k?'hot':''}" data-adv="${k}" ${c.gold<ADV_COST?'disabled':''}>${armed==='adv'+k?'再按一次確定轉職':'轉職為'+A.n}</button></div>`; }).join(''); }
 function sellTools(c){ const town=cur.id==='village', a=q=>armed==='sell'+q;
   return `<div class="row2" style="margin:4px 0 6px"><button class="btn" data-act="autoequip">一鍵換上更好的裝備</button><button class="btn" data-act="sortbag">整理背包</button></div>
@@ -680,3 +706,10 @@ resize();
 loadAssets().then(()=>{ connect(); requestAnimationFrame(frame); });
 // debug / test handle
 window.SM={send,toggleAuto,openPanel,get ME(){return ME;},get players(){return players;},get cur(){return cur;},get P(){return P;},get tgs(){return tgs.length;},get target(){const t=myTarget();return t?t.k:null;},get dbg(){return {auto,joyHold,mobs:cur.mobs.map(m=>m.k).join(','),AS,P:[P.x,P.y]};},get loot(){return loot;}};
+
+function npcHint(o){ const c=ME; if(!c) return false; const a=o.act;
+  const advReady=!c.adv&&c.lv>=ADV_LV&&(!c.advq||c.advq.s===3);
+  if(a==='guard') return (QUESTS[c.mq]&&QUESTS[c.mq].type==='talk')||(c.cls==='knight'&&advReady);
+  if(a&&a.startsWith('mentor:')) return MENTOR[c.cls].npc===a.slice(7)&&advReady;
+  if(a==='guild') return !!(c.bounty&&c.bounty.list.some(b=>b.p>=b.need));
+  return false; }

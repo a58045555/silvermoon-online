@@ -100,7 +100,7 @@ function buildVillage(){ const m=newMap('village'),W=m.W,H=m.H,R=rng(3),ri=(a,b)
   put(m,'barrel',7,4);put(m,'barrel',7,5);put(m,'crate',21,4);put(m,'crate',21,5);put(m,'barrel',25,15);
   for(const [a,b,v] of [[10,3,0],[18,2,2],[26,11,1],[9,15,0],[26,19,2],[3,19,1],[19,11,2],[9,19,1],[21,19,0]])put(m,'tree',a,b,v);
   const npc=(k,x,y,name,act)=>{m.npcs.push({k,x,y,name,act});m.blk[y*W+x]=1;};
-  npc('smith',6,6,'鐵匠 巴爾克','smith');npc('merchant',22,6,'雜貨商 莉娜','shop');npc('guard',13,18,'守衛 艾德','guard');npc('tele',17,17,'傳送師 露娜','tele');
+  npc('smith',6,6,'鐵匠 巴爾克','smith');npc('merchant',22,6,'雜貨商 莉娜','shop');npc('guard',13,18,'守衛 艾德','guard');npc('tele',17,17,'傳送師 露娜','tele');npc('sylvie',9,12,'精靈遊俠 希爾薇','mentor:sylvie');npc('norn',20,10,'老學者 諾恩','mentor:norn');npc('vera',25,17,'黑暗妖精 薇拉','mentor:vera');npc('guild',10,18,'公會接待 米亞','guild');
   // town wall along the south edge with a gatehouse over the road (x 14-15)
   m.wall={y:H-1,x0:2,x1:W-3,g0:13,g1:16};
   for(let x=2;x<=W-3;x++) if(x<14||x>15) m.blk[(H-1)*W+x]=1;
@@ -276,7 +276,7 @@ export function dailyFor(day){ const R=rng([...day].reduce((a,c)=>a*31+c.charCod
 export const RARN = ['','魔法','稀有','傳說'];
 
 // ---------- class advancement (Lv.30) ----------
-export const ADV_LV = 30, ADV_COST = 20000;
+export const ADV_LV = 30, ADV_COST = 10000;
 export const ADV = {
   paladin:{base:'knight',n:'聖騎士',d:'以聖光守護隊友的騎士。體質、HP、防禦提升。',bon:{con:6,hp:200,def:10},sk:[
     {id:'p1',n:'聖光審判',lv:30,mp:20,cd:6,tgt:1,ai:'tgt',d:'3 倍神聖傷害，並回復自己 8% HP'},
@@ -314,3 +314,48 @@ export const TELE = [
   {k:'colossus',n:'白骨巨像的祭壇',map:'waste',boss:1,p:2000,lv:'Boss Lv.20'},
   {k:'firelord',n:'卡爾薩的熔岩王座',map:'cave',boss:1,p:5000,lv:'Boss Lv.28'}
 ];
+
+// ---------- class advancement quest: each class has a mentor ----------
+export const MENTOR = {
+  knight:{npc:'guard',who:'守衛 艾德',token:'騎士團殘章',mobs:['skel','dknight'],
+    talk:'「我曾經是銀月騎士團的見習生。要接下這把劍的重量，先去荒原把騎士團散落的殘章找回來。」'},
+  ranger:{npc:'sylvie',who:'精靈遊俠 希爾薇',token:'毒蠍尾刺',mobs:['scorp','hound'],
+    talk:'「精靈的弓不是用來炫耀的。帶十根沙蠍或地獄犬的毒刺回來，我教你真正的射法。」'},
+  mage:{npc:'norn',who:'老學者 諾恩',token:'月痕殘頁',mobs:['mummy','cultist'],
+    talk:'「月之塔的藏書都被教團搶走了。從木乃伊和魔族祭司身上把殘頁找回來，我就把剩下的咒文傳給你。」'},
+  darkelf:{npc:'vera',who:'黑暗妖精 薇拉',token:'影之結晶',mobs:['ghoul','bat'],
+    talk:'「影子會記住每一個獵物。去食屍鬼和火焰蝙蝠身上取十顆影之結晶，證明你配得上我們的名字。」'}
+};
+export const ADVQ_NEED = 10, ADVQ_RATE = .3;
+// ---------- adventurers' guild bounties ----------
+export const BOUNTY_DAY_MAX = 20;
+export function makeBounty(lv,R=Math.random){ const maps=lv<12?['forest']:lv<20?['forest','waste']:lv<26?['waste','cave']:['cave'];
+  const map=maps[Math.floor(R()*maps.length)], d=MAPDEF[map];
+  if(R()<.15&&lv>=10) return {map,k:d.boss,need:1,p:0,boss:1};
+  const pool=d.mobs.filter(k=>MT[k].lv<=lv+3); const k=(pool.length?pool:d.mobs)[Math.floor(R()*(pool.length||d.mobs.length))];
+  return {map,k,need:10+Math.floor(R()*4)*5,p:0}; }
+// ---------- achievements & titles ----------
+export const ACH = [
+  {id:'lv10',t:'初出茅廬',d:'達到 Lv.10',k:'lv',v:10,g:1000},
+  {id:'lv30',t:'身經百戰',d:'達到 Lv.30',k:'lv',v:30,g:10000},
+  {id:'lv50',t:'銀月傳奇',d:'達到 Lv.50',k:'lv',v:50,g:50000},
+  {id:'k500',t:'獵人',d:'累計打倒 500 隻怪物',k:'kills',v:500,g:3000},
+  {id:'k3000',t:'屠戮者',d:'累計打倒 3,000 隻怪物',k:'kills',v:3000,g:20000},
+  {id:'slime',t:'史萊姆剋星',d:'打倒 200 隻苔蘚史萊姆',k:'mk:slime',v:200,g:1500},
+  {id:'goblin',t:'哥布林獵手',d:'打倒 300 隻哥布林',k:'mk:goblin',v:300,g:3000},
+  {id:'skel',t:'送葬人',d:'打倒 300 隻迷途骷髏兵',k:'mk:skel',v:300,g:5000},
+  {id:'treant',t:'伐木者',d:'打倒腐木樹妖 10 次',k:'bk:treant',v:10,g:5000},
+  {id:'colossus',t:'碎骨者',d:'打倒白骨巨像 10 次',k:'bk:colossus',v:10,g:10000},
+  {id:'firelord',t:'滅火者',d:'打倒熾焰領主卡爾薩 10 次',k:'bk:firelord',v:10,g:20000},
+  {id:'mq',t:'新月之誓',d:'完成主線「新月之誓」',k:'mq',v:11,g:10000},
+  {id:'adv',t:'覺醒者',d:'完成轉職',k:'adv',v:1,g:5000},
+  {id:'en7',t:'鍛造師',d:'把裝備衝到 +7',k:'maxEn',v:7,g:5000},
+  {id:'en9',t:'月痕之主',d:'把裝備衝到 +9',k:'maxEn',v:9,g:30000},
+  {id:'leg',t:'傳說持有者',d:'撿到一件傳說裝備',k:'legGot',v:1,g:5000},
+  {id:'inv',t:'守村英雄',d:'守住晨霧村 3 次',k:'invWon',v:3,g:8000},
+  {id:'wb',t:'焚月者',d:'擊倒世界 Boss 卡爾薩殘火',k:'wbKills',v:1,g:20000},
+  {id:'b20',t:'公會之星',d:'完成 20 張公會委託',k:'bountyDone',v:20,g:8000},
+  {id:'rich',t:'富商',d:'身上同時有 100 萬金幣',k:'gold',v:1000000,g:0}
+];
+export function achValue(c,k){ if(k==='lv') return c.lv; if(k==='kills') return c.kills|0; if(k==='mq') return c.mq|0; if(k==='adv') return c.adv?1:0; if(k==='gold') return c.gold|0;
+  if(k.startsWith('mk:')) return (c.mk&&c.mk[k.slice(3)])|0; if(k.startsWith('bk:')) return (c.bk&&c.bk[k.slice(3)])|0; return c[k]|0; }

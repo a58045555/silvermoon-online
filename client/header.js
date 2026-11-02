@@ -1,5 +1,5 @@
 // 銀月大陸 Online client — built by tools/build_client.py from client/header.js + client/legacy.js + client/client.js
-import { CLS, STATN, STATD, MT, MAPDEF, SHOP, INV_N, BAGMAX, SLOTS, SLOTN, NOSHIELD, BIG, SHOP_GEAR, PK_MIN_LV, CLAN_COST, CLAN_MIN_LV,
+import { MENTOR, ADVQ_NEED, BOUNTY_DAY_MAX, ACH, achValue, CLS, STATN, STATD, MT, MAPDEF, SHOP, INV_N, BAGMAX, SLOTS, SLOTN, NOSHIELD, BIG, SHOP_GEAR, PK_MIN_LV, CLAN_COST, CLAN_MIN_LV,
   SKILLS, QUESTS, LEGEND_W, RARN, ADV, ADV_KEYS, ADV_LV, ADV_COST, TELE, skillsOf, rng, buildMap, itemBase, itemBaseName, itemName, itemStat, eqSlotFor, enchRate, sellP, shopPrice, expNeed, cheb, dist } from '/shared/data.js';
 
 const $ = s=>document.querySelector(s);

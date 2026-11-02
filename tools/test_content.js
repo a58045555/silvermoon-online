@@ -96,9 +96,18 @@ for(const [map,k] of [['forest','treant'],['waste','colossus'],['cave','firelord
 // class advancement + teleporter
 { const A=await mk('轉職','mage',30); W.enterMap(A,'village',{x:15,y:14}); A.c.gold=50000;
   W.handle(A,{t:'advance',to:'paladin'}); ok(!A.c.adv,'cannot take another class advancement');
-  W.handle(A,{t:'advance',to:'archmage'}); ok(A.c.adv==='archmage'&&A.c.gold===30000,'mage advances to archmage');
+  W.handle(A,{t:'advance',to:'archmage'}); ok(!A.c.adv,'advancement needs the mentor trial');
+  W.handle(A,{t:'advstart'}); ok(A.c.advq&&A.c.advq.s===1,'mentor trial started');
+  W.enterMap(A,'waste',{x:10,y:10}); const WS=W.maps.waste; for(let i=0;i<80&&A.c.advq.s===1;i++){ const m=W.spawnMob(WS,'mummy',11,10); m.dmg.set(A.id,1); W.killMob(WS,m); }
+  ok(A.c.advq.s===2,'tokens collected from mummies'); { const b=W.spawnMob(WS,'colossus',12,12); b.dmg.set(A.id,1); W.killMob(WS,b); } ok(A.c.advq.s===3,'colossus completes the trial');
+  W.enterMap(A,'village',{x:15,y:14}); A.c.gold=50000; W.handle(A,{t:'advance',to:'archmage'}); ok(A.c.adv==='archmage'&&A.c.gold===40000,'mage advances to archmage');
   W.enterMap(A,'forest',{x:20,y:20}); clearF(); const r=[[1,0],[0,1],[-1,0]].map(([dx,dy])=>W.spawnMob(F,'wolf',A.x+dx,A.y+dy)); A.c.lv=40; A.c.mp=999; A.cds={};
   W.handle(A,{t:'skill',i:4}); ok(r.every(m=>m.hp<m.maxhp||!F.mobs.has(m.id)),'雷霆風暴 hits everything around');
   W.enterMap(A,'village',{x:15,y:14}); const g=A.c.gold; W.handle(A,{t:'tele',to:'colossus'}); ok(A.inst.id==='waste'&&A.c.gold===g-2000&&Math.hypot(A.x-A.inst.m.boss.x,A.y-A.inst.m.boss.y)<8,'teleporter sends to the colossus altar'); }
+// bounty board and achievements
+{ const B=await mk('委託','knight',8); W.checkBounty(B); const b=B.c.bounty.list[0]; ok(B.c.bounty.list.length===3,'three bounties offered');
+  const I=W.maps[b.map]; W.enterMap(B,b.map,null,'village'); for(let i=0;i<b.need;i++){ const m=W.spawnMob(I,b.k,2,2); m.dmg.set(B.id,1); W.killMob(I,m); }
+  ok(b.p>=b.need,'bounty progress counts kills'); W.enterMap(B,'village',{x:15,y:14}); const g=B.c.gold; W.handle(B,{t:'bclaim',i:0}); ok(B.c.gold>g&&B.c.bounty.done===1,'bounty reward claimed');
+  B.c.lv=10; W.me(B); W.tick(); ok(B.c.ach.lv10&&B.c.title==='lv10','achievement unlocks a title'); }
 ok(SKILLS.knight.length===3&&QUESTS.length>=10,'data tables present');
 console.log('done'); process.exit();

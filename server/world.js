@@ -1,5 +1,5 @@
 // Authoritative game world: one shared instance per map, ticking at 10 Hz.
-import { ADV, ADV_LV, ADV_COST, TELE, skillsOf, SKILLS, QUESTS, dailyFor, makeLegend, LEGEND_W, RARN, itemBaseName } from '../shared/data.js';
+import { MENTOR, ADVQ_NEED, ADVQ_RATE, BOUNTY_DAY_MAX, makeBounty, ACH, achValue, ADV, ADV_LV, ADV_COST, TELE, skillsOf, SKILLS, QUESTS, dailyFor, makeLegend, LEGEND_W, RARN, itemBaseName } from '../shared/data.js';
 import { CLS, MT, MAPDEF, SHOP, INV_N, BAGMAX, PK_MIN_LV, CLAN_COST, CLAN_MIN_LV, DIRS, NOSHIELD, SHOP_GEAR,
   buildMap, arrivalPoint, inSafeZone, findPath, calcStats, expNeed, enchRate, sellP, shopPrice, makeItem, randomSlot,
   itemName, eqSlotFor, itemScore, cheb, dist, NAME_RE } from '../shared/data.js';
@@ -116,7 +116,7 @@ export class World {
       inst.ev=[];
     }
     for(const P of this.players.values()){
-      if(P.dirty){ P.dirty=false; P.stats=calcStats(P.c); this.send(P,{t:'me',c:this.meView(P)}); }
+      if(P.dirty){ P.dirty=false; this.checkAch(P); this.checkBounty(P); P.stats=calcStats(P.c); this.send(P,{t:'me',c:this.meView(P)}); }
       P.saveT-=dt; if(P.saveT<=0){ P.saveT=AUTOSAVE; this.saveChar(P); }
       P.msgCount=0;
     }
@@ -127,10 +127,10 @@ export class World {
     party: P.party?[...P.party.members].map(m=>({id:m.id,name:m.name,lv:m.c.lv,cls:m.c.cls,hp:m.c.hp,maxHP:m.stats.maxHP,map:m.inst?.id})):null,
     partyLeader: P.party?P.party.leader===P:false, skCd:Math.max(0,P.skCd), dead:P.dead>0,
     adv:c.adv||null, cds:skillsOf(c).map(k=>Math.max(0,+(P.cds[k.id]||0).toFixed(1))), buff:{iron:Math.max(0,P.buff.iron|0),haste:Math.max(0,P.buff.haste|0),shadow:Math.max(0,P.buff.shadow|0),rage:Math.max(0,P.buff.rage|0)},
-    mq:c.mq, mqp:c.mqp, daily:c.daily }; }
+    mq:c.mq, mqp:c.mqp, daily:c.daily, advq:c.advq||null, bounty:c.bounty||null, ach:c.ach||{}, title:c.title||null, mk:c.mk||{}, bk:c.bk||{}, kills:c.kills|0, maxEn:c.maxEn|0, legGot:c.legGot|0, invWon:c.invWon|0, wbKills:c.wbKills|0, bountyDone:c.bountyDone|0 }; }
   snapshot(inst){
     const p=[],m=[];
-    for(const P of inst.players) p.push([P.id,P.name,P.c.cls,P.c.g,P.x,P.y,Math.round(P.c.hp/P.stats.maxHP*100),P.c.lv,(P.c.lawful<0?1:0)|(P.purple>0?2:0)|(P.dead>0?4:0)|(P.pk?8:0),P.c.clan||'',P.face,P.c.eq.w.en|0]);
+    for(const P of inst.players) p.push([P.id,P.name,P.c.cls,P.c.g,P.x,P.y,Math.round(P.c.hp/P.stats.maxHP*100),P.c.lv,(P.c.lawful<0?1:0)|(P.purple>0?2:0)|(P.dead>0?4:0)|(P.pk?8:0),P.c.clan||'',P.face,P.c.eq.w.en|0,P.c.title||'']);
     for(const o of inst.mobs.values()) m.push([o.id,o.k,o.x,o.y,o.hp,o.maxhp,o.face,o.dir,o.stun>0?1:0,o.tele>0?Math.round(o.tele*10):0,o.nm||0]);
     const msg={t:'s',p,m,e:inst.ev};
     if(inst.lootDirty){ inst.lootDirty=false; const now=Date.now()/1000;
@@ -275,10 +275,12 @@ export class World {
     for(const o of group){ const e=Math.max(1,Math.round(totalExp*o.c.lv/lvSum)); this.gainExp(o,e); o.c.gold+=share; o.c.kills=(o.c.kills||0)+1;
       o.c.lawful=Math.min(32767,(o.c.lawful||0)+Math.max(1,Math.round(t.lv/2))); if(m.boss) o.c.bossKills=(o.c.bossKills||0)+1;
       this.logTo(o,`打倒${t.n}，經驗 +${e}、金幣 +${share}`); this.me(o);
-      this.questEv(o,'kill',m.k,1); if(group.length>1) this.questEv(o,'party',null,1); }
+      this.questEv(o,'kill',m.k,1); if(group.length>1) this.questEv(o,'party',null,1);
+      o.c.mk=o.c.mk||{}; o.c.mk[m.k]=(o.c.mk[m.k]||0)+1; if(m.boss){ o.c.bk=o.c.bk||{}; o.c.bk[m.k]=(o.c.bk[m.k]||0)+1; }
+      this.advqKill(o,m); this.bountyKill(o,m.k); }
     if(m.boss){ // everyone who hit the boss gets boss credit for dailies
       const hitters=new Set(group); for(const pid of m.dmg.keys()){ const o=this.players.get(pid); if(o&&o.inst===inst) hitters.add(o); }
-      for(const o of hitters){ this.questEv(o,'boss',null,1); if(!group.includes(o)) this.questEv(o,'kill',m.k,1); } }
+      for(const o of hitters){ this.questEv(o,'boss',null,1); if(!group.includes(o)){ this.questEv(o,'kill',m.k,1); this.advqKill(o,m); this.bountyKill(o,m.k); } } }
     const owners=new Set(group.map(o=>o.id)), tier=inst.def.tier;
     const drop=(L)=>this.dropLoot(inst,m.x,m.y,L,owners,best);
     if(m.boss){ drop({k:'ws'}); drop({k:'as'}); drop({k:'big',n:2});
@@ -311,6 +313,7 @@ export class World {
     inst.loot.delete(L.id); inst.lootDirty=true; this.ev(inst,'lp',L.id,P.id,L.q);
     const nm=L.it?(L.it.leg?`【傳說】${itemName(L.it,c.cls)}`:itemName(L.it,c.cls)+(L.q===2?'【稀有】':L.q===1?'【魔法】':'')):L.name;
     this.logTo(P,`撿到 ${nm}`); this.me(P); this.questEv(P,'pick',null,1);
+    if(L.q>=3) c.legGot=(c.legGot|0)+1;
     if(L.q>=3) this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`✦ ${P.name} 獲得了傳說${L.it.s==='w'?'武器':'飾品'}「${itemBaseName(L.it,c.cls)}」！`});
     if(P.party) for(const o of P.party.members) if(o!==P&&o.inst===inst) this.logTo(o,`${P.name} 撿到 ${nm}`); }
   // ---------- telegraphed attacks (red circles) ----------
@@ -373,7 +376,7 @@ export class World {
     const ranked=[...I.contrib.entries()].map(([pid,v])=>[this.players.get(pid),v]).filter(([P])=>P).sort((a,b)=>b[1]-a[1]);
     const tot=ranked.reduce((a,[,v])=>a+v,0)||1;
     ranked.forEach(([P,v],i)=>{ const c=P.c, share=v/tot, g=Math.round(1500+8000*share+c.lv*60);
-      c.gold+=g; c.inv.big=(c.inv.big||0)+3; const ws=i<3?2:1; c.inv.ws=(c.inv.ws||0)+ws; c.inv.as=(c.inv.as||0)+1; this.gainExp(P,Math.round(expNeed(c.lv)*.25)); this.me(P);
+      c.invWon=(c.invWon|0)+1; c.gold+=g; c.inv.big=(c.inv.big||0)+3; const ws=i<3?2:1; c.inv.ws=(c.inv.ws||0)+ws; c.inv.as=(c.inv.as||0)+1; this.gainExp(P,Math.round(expNeed(c.lv)*.25)); this.me(P);
       this.send(P,{t:'qdone',daily:1,n:`守住晨霧村（貢獻第 ${i+1} 名）`,r:`金幣 +${g}、武器強化卷軸 ×${ws}、防具強化卷軸 ×1、強力藥水 ×3、經驗`}); });
     this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`晨霧村守住了！貢獻前三名：${ranked.slice(0,3).map(([P])=>P.name).join('、')||'（無）'}`}); }
 
@@ -392,7 +395,7 @@ export class World {
     const tot=parts.reduce((a,[,d])=>a+d,0)||1, owners=new Set(parts.map(([P])=>P.id));
     const clans=new Map(); for(const [P,d] of parts){ const k=P.c.clan||'（無血盟）'; clans.set(k,(clans.get(k)||0)+d); }
     const topClans=[...clans.entries()].sort((a,b)=>b[1]-a[1]);
-    for(const [P,d] of parts){ if(d/tot<.01) continue; const c=P.c; c.inv.ws=(c.inv.ws||0)+2; c.inv.as=(c.inv.as||0)+2; c.gold+=5000; c.bossKills=(c.bossKills||0)+1;
+    for(const [P,d] of parts){ if(d/tot<.01) continue; const c=P.c; c.wbKills=(c.wbKills|0)+1; c.inv.ws=(c.inv.ws||0)+2; c.inv.as=(c.inv.as||0)+2; c.gold+=5000; c.bossKills=(c.bossKills||0)+1;
       this.gainExp(P,MT.firelord.exp*3); this.questEv(P,'boss',null,1); this.questEv(P,'kill','firelord',1); this.me(P);
       this.send(P,{t:'qdone',daily:1,n:'擊倒卡爾薩殘火',r:`傷害佔 ${Math.round(d/tot*100)}%・金幣 +5000、強化卷軸各 2、經驗`}); }
     const top=topClans[0]&&topClans[0][0]!=='（無血盟）'?topClans[0][0]:null;
@@ -403,6 +406,16 @@ export class World {
     this.broadcast({t:'event',k:'wb',on:false});
     this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`卡爾薩殘火熄滅了！血盟傷害排名：${topClans.slice(0,3).map(([k,d],i)=>`${i+1}. ${k}（${Math.round(d/tot*100)}%）`).join('　')}${top?`。「${top}」成員額外獲得武器強化卷軸 ×2！`:''}`}); }
 
+  // ---------- advancement quest, bounties, achievements ----------
+  advqKill(P,m){ const c=P.c,q=c.advq; if(!q||c.adv) return; const M=MENTOR[c.cls];
+    if(q.s===1&&M.mobs.includes(m.k)&&Math.random()<ADVQ_RATE){ q.n++; this.logTo(P,`獲得「${M.token}」（${q.n}/${ADVQ_NEED}）`); if(q.n>=ADVQ_NEED){ q.s=2; this.send(P,{t:'qdone',note:1,n:`收齊${M.token}`,r:'最後的試煉：打倒骸骨荒原的白骨巨像'}); } this.me(P); }
+    else if(q.s===2&&m.k==='colossus'){ q.s=3; this.send(P,{t:'qdone',note:1,n:'轉職試煉完成',r:`回晨霧村找${M.who}選擇你的道路`}); this.me(P); } }
+  checkBounty(P){ const c=P.c,d=today(); if(!c.bounty||c.bounty.day!==d) c.bounty={day:d,done:0,list:[]}; while(c.bounty.list.length<3) c.bounty.list.push(this.freshBounty(c)); }
+  freshBounty(c){ let b; for(let i=0;i<8;i++){ b=makeBounty(c.lv); if(!(c.bounty&&c.bounty.list.some(x=>x&&x.k===b.k))) break; } return b; }
+  bountyKill(P,k){ const c=P.c; this.checkBounty(P); let ch=false; for(const b of c.bounty.list) if(b.k===k&&b.p<b.need){ b.p++; ch=true; if(b.p===b.need) this.logTo(P,`公會委託完成：${MT[k].n}，回村找米亞領獎。`); } if(ch) this.me(P); }
+  checkAch(P){ const c=P.c; c.ach=c.ach||{}; for(const a of ACH){ if(c.ach[a.id]) continue; if(achValue(c,a.k)>=a.v){ c.ach[a.id]=1; if(a.g) c.gold+=a.g;
+      this.send(P,{t:'qdone',note:1,n:`成就達成：${a.t}`,r:`${a.d}${a.g?`・金幣 +${a.g.toLocaleString()}`:''}・獲得稱號「${a.t}」`}); if(!c.title) c.title=a.id;
+      if(['lv50','wb','en9','firelord','rich'].includes(a.id)) this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`${P.name} 獲得了稱號「${a.t}」！`}); } } }
   // ---------- quests ----------
   checkDaily(P){ const c=P.c,d=today(); if(!c.daily||c.daily.day!==d){ c.daily={day:d,list:dailyFor(d),bonus:false}; this.me(P); } }
   questEv(P,type,k,n){ const c=P.c; this.checkDaily(P);
@@ -496,10 +509,19 @@ export class World {
       case 'buygear': { if(!town) return; const ok=SHOP_GEAR.some(([s,t])=>s===msg.s&&t===msg.tier); if(!ok) return; const pr=shopPrice(msg.s,msg.tier);
         if(c.bag.length>=BAGMAX) return this.logTo(P,'背包滿了。'); if(c.gold<pr) return this.logTo(P,'金幣不夠。'); c.gold-=pr; c.bag.push({s:msg.s,t:msg.tier,en:0}); this.me(P); return this.logTo(P,'買好了，到角色頁裝備。'); }
       case 'sell': { if(!town) return this.logTo(P,'要在村莊才能賣東西。'); const i=msg.i|0,it=c.bag[i]; if(!it) return; c.bag.splice(i,1); c.gold+=sellP(it); this.me(P); return this.logTo(P,`賣掉 ${itemName(it,c.cls)}`); }
-      case 'advance': { const A=ADV[String(msg.to)]; if(!town||!A||c.adv||A.base!==c.cls) return; if(c.lv<ADV_LV) return this.logTo(P,`Lv.${ADV_LV} 才能轉職。`); if(c.gold<ADV_COST) return this.logTo(P,`轉職需要 ${ADV_COST.toLocaleString()} 金幣。`);
+      case 'advance': { const A=ADV[String(msg.to)]; if(!town||!A||c.adv||A.base!==c.cls) return; if(!c.advq||c.advq.s!==3) return this.logTo(P,'要先完成導師的轉職試煉。'); if(c.lv<ADV_LV) return this.logTo(P,`Lv.${ADV_LV} 才能轉職。`); if(c.gold<ADV_COST) return this.logTo(P,`轉職需要 ${ADV_COST.toLocaleString()} 金幣。`);
         c.gold-=ADV_COST; c.adv=String(msg.to); P.stats=calcStats(c); c.hp=P.stats.maxHP; c.mp=P.stats.maxMP; this.ev(inst,'l',P.id); this.me(P);
         this.send(P,{t:'qdone',n:`轉職為「${A.n}」`,r:`學會 ${A.sk.map(k=>k.n).join('、')}`});
         return this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`${P.name} 轉職為${A.n}！`}); }
+      case 'advstart': { if(!town||c.adv||c.advq) return; if(c.lv<ADV_LV) return this.logTo(P,`Lv.${ADV_LV} 才能接受轉職試煉。`); const M=MENTOR[c.cls];
+        c.advq={s:1,n:0}; this.me(P); return this.send(P,{t:'qdone',note:1,n:'接受轉職試煉',r:`收集 ${ADVQ_NEED} 個「${M.token}」（${M.mobs.map(k=>MT[k].n).join('、')}）`}); }
+      case 'bclaim': { if(!town) return; this.checkBounty(P); const b=c.bounty.list[msg.i|0]; if(!b||b.p<b.need) return;
+        const e=Math.round(expNeed(c.lv)*(b.boss?.35:.15)), g=Math.round((300+c.lv*60)*(b.boss?3:1)); this.gainExp(P,e); c.gold+=g; let extra='';
+        if(Math.random()<(b.boss?1:.3)){ const k=Math.random()<.5?'ws':'as'; c.inv[k]=(c.inv[k]||0)+1; extra=`、${INV_N[k]}`; }
+        c.bounty.done++; c.bountyDone=(c.bountyDone|0)+1; c.bounty.list[msg.i|0]=c.bounty.done+c.bounty.list.length<=BOUNTY_DAY_MAX?this.freshBounty(c):null; c.bounty.list=c.bounty.list.filter(Boolean);
+        this.me(P); return this.send(P,{t:'qdone',note:1,n:'公會委託完成',r:`經驗 +${e}、金幣 +${g}${extra}`}); }
+      case 'breroll': { if(!town) return; this.checkBounty(P); const i=msg.i|0; if(!c.bounty.list[i]) return; if(c.gold<200) return this.logTo(P,'換委託要 200 金幣。'); c.gold-=200; c.bounty.list[i]=this.freshBounty(c); this.me(P); return; }
+      case 'title': { const id=String(msg.id||''); if(id&&!(c.ach&&c.ach[id])) return; c.title=id||null; this.me(P); return; }
       case 'tele': { const T=TELE.find(x=>x.k===msg.to); if(!town||!T||P.dead>0) return; if(c.gold<T.p) return this.logTo(P,'金幣不夠。');
         const dest=this.maps[T.map],M=dest.m; let pos=null;
         if(T.boss){ for(let r=4;r<=7&&!pos;r++) for(let a=0;a<16&&!pos;a++){ const x=Math.round(M.boss.x+Math.cos(a/16*6.283)*r),y=Math.round(M.boss.y+Math.sin(a/16*6.283)*r); if(x>1&&y>1&&x<M.W-2&&y<M.H-2&&!M.blk[y*M.W+x]) pos={x,y}; } }
@@ -525,7 +547,7 @@ export class World {
         else if(['str','dex','con','int','wis'].includes(msg.k)){ c.sp[msg.k]++; c.pts--; } this.me(P); return; }
       case 'enchant': { if(!town) return; const sl=String(msg.s); const it=c.eq[sl]; if(!it||['n','r1','r2'].includes(sl)) return; const kind=sl==='w'?'w':'a',sc=kind==='w'?'ws':'as';
         if(!c.inv[sc]) return this.logTo(P,'沒有強化卷軸。'); c.inv[sc]--; const r=enchRate(kind,it.en),before=itemName(it,c.cls); this.questEv(P,'enchant',null,1);
-        if(Math.random()<r){ it.en++; this.send(P,{t:'ench',ok:true,msg:`成功！${itemName(it,c.cls)}`}); if(it.en>=8) this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`${P.name} 把 ${before} 衝到了 +${it.en}！`}); }
+        if(Math.random()<r){ it.en++; c.maxEn=Math.max(c.maxEn|0,it.en); this.send(P,{t:'ench',ok:true,msg:`成功！${itemName(it,c.cls)}`}); if(it.en>=8) this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`${P.name} 把 ${before} 衝到了 +${it.en}！`}); }
         else { c.eq[sl]=(sl==='w'||sl==='a')?{s:sl,t:0,en:0}:null; this.send(P,{t:'ench',ok:false,msg:`${before} 爆掉了…`}); if(it.en>=6) this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`${P.name} 的 ${before} 在鐵匠鋪化為碎片。`}); }
         this.me(P); return; }
       case 'pk': P.pk=!!msg.on; this.logTo(P,P.pk?'PK 模式開啟：點其他玩家就會攻擊。':'PK 模式關閉。'); this.me(P); return;
