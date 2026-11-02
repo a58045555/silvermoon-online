@@ -84,5 +84,10 @@ for(const [map,k] of [['forest','treant'],['waste','colossus'],['cave','firelord
   for(let i=0;i<30;i++){ C.bossT=0; C.spawnT=0; W.tick(); } ok([...C.mobs.values()].filter(m=>m.boss).length===1,'normal boss does not spawn during world boss');
   const ws0=A.c.inv.ws; b.dmg.set(A.id,b.maxhp); W.killMob(C,b); const leg=[...C.loot.values()].filter(L=>L.q===3).length;
   ok(!W.wb&&leg>=3,`world boss drops ${leg} legendaries`); ok(A.c.inv.ws>ws0,'participants rewarded'); }
+// one-click sell, lock, auto-equip
+{ const S=await mk('商人','knight',10); W.enterMap(S,'village',{x:15,y:14}); S.c.bag=[{s:'h',t:0,en:0},{s:'h',t:1,en:0,q:1,bon:{str:1}},{s:'w',t:3,en:0},{s:'c',t:2,en:0,lock:true},{s:'g',t:4,en:0,q:2,bon:{str:2}}];
+  W.handle(S,{t:'autoequip'}); ok(S.c.eq.w.t===3&&S.c.eq.g&&S.c.eq.g.t===4,'auto-equip picks better weapon and gloves');
+  const g0=S.c.gold; W.handle(S,{t:'sellall',q:0}); ok(S.c.gold>g0&&S.c.bag.every(it=>it.lock||(it.q|0)>0),'sell-all sells only normal unlocked items');
+  S.c.bag.push({s:'b',t:1,en:0}); W.handle(S,{t:'lock',i:S.c.bag.length-1}); W.handle(S,{t:'sellall',q:2}); ok(S.c.bag.length===1&&S.c.bag[0].lock,'locked item survives sell-all'); }
 ok(SKILLS.knight.length===3&&QUESTS.length>=10,'data tables present');
 console.log('done'); process.exit();

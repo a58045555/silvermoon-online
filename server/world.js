@@ -2,7 +2,7 @@
 import { SKILLS, QUESTS, dailyFor, makeLegend, LEGEND_W, RARN, itemBaseName } from '../shared/data.js';
 import { CLS, MT, MAPDEF, SHOP, INV_N, BAGMAX, PK_MIN_LV, CLAN_COST, CLAN_MIN_LV, DIRS, NOSHIELD, SHOP_GEAR,
   buildMap, arrivalPoint, inSafeZone, findPath, calcStats, expNeed, enchRate, sellP, shopPrice, makeItem, randomSlot,
-  itemName, eqSlotFor, cheb, dist, NAME_RE } from '../shared/data.js';
+  itemName, eqSlotFor, itemScore, cheb, dist, NAME_RE } from '../shared/data.js';
 
 const TICK = 100; // ms
 const rnd = (a,b)=>a+Math.random()*(b-a), ri = (a,b)=>Math.floor(rnd(a,b+1)), pick = a=>a[Math.floor(Math.random()*a.length)];
@@ -462,10 +462,22 @@ export class World {
       case 'use': return this.useItem(P,msg.k);
       case 'ret': if(P.dead>0||town) return; if(!c.inv.ret) return this.logTo(P,'沒有回村卷軸了。'); c.inv.ret--; this.enterMap(P,'village',{x:15,y:14}); return this.logTo(P,'卷軸的光芒把你送回晨霧村。');
       case 'heal': if(!town) return; c.hp=P.stats.maxHP; c.mp=P.stats.maxMP; this.ev(inst,'h',P.id); this.me(P); return this.logTo(P,'泉水的光芒治癒了你。');
-      case 'buy': { if(!town) return; const s=SHOP.find(x=>x.k===msg.k),q=msg.q|0; if(!s||!s.q.includes(q)) return; if(c.gold<s.p*q) return this.logTo(P,'金幣不夠。'); c.gold-=s.p*q; c.inv[s.k]=(c.inv[s.k]||0)+q; this.me(P); return; }
+      case 'buy': { if(!town) return; const s=SHOP.find(x=>x.k===msg.k),q=msg.q|0; if(!s||q<1||q>200) return; if(c.gold<s.p*q) return this.logTo(P,'金幣不夠。'); c.gold-=s.p*q; c.inv[s.k]=(c.inv[s.k]||0)+q; this.me(P); return; }
       case 'buygear': { if(!town) return; const ok=SHOP_GEAR.some(([s,t])=>s===msg.s&&t===msg.tier); if(!ok) return; const pr=shopPrice(msg.s,msg.tier);
         if(c.bag.length>=BAGMAX) return this.logTo(P,'背包滿了。'); if(c.gold<pr) return this.logTo(P,'金幣不夠。'); c.gold-=pr; c.bag.push({s:msg.s,t:msg.tier,en:0}); this.me(P); return this.logTo(P,'買好了，到角色頁裝備。'); }
       case 'sell': { if(!town) return this.logTo(P,'要在村莊才能賣東西。'); const i=msg.i|0,it=c.bag[i]; if(!it) return; c.bag.splice(i,1); c.gold+=sellP(it); this.me(P); return this.logTo(P,`賣掉 ${itemName(it,c.cls)}`); }
+      case 'sellall': { if(!town) return this.logTo(P,'要在村莊才能賣東西。'); const maxQ=Math.max(0,Math.min(2,msg.q|0)); let n=0,g=0;
+        c.bag=c.bag.filter(it=>{ if(it.lock||it.leg||(it.q|0)>maxQ) return true; n++; g+=sellP(it); return false; });
+        c.gold+=g; this.me(P); return this.logTo(P,n?`一鍵販賣：賣掉 ${n} 件，獲得 ${g.toLocaleString()} 金幣。`:'沒有可以賣的東西（鎖定、傳說和更高稀有度的不會賣）。'); }
+      case 'lock': { const it=c.bag[msg.i|0]; if(!it) return; it.lock=!it.lock; this.me(P); return; }
+      case 'sortbag': { const order='whacgbsnr'; c.bag.sort((a,b)=>(order.indexOf(a.s)-order.indexOf(b.s))||((b.q|0)-(a.q|0))||((b.t|0)-(a.t|0))||((b.en|0)-(a.en|0))); this.me(P); return; }
+      case 'autoequip': { let changed=[];
+        for(let pass=0;pass<12;pass++){ let best=null;
+          c.bag.forEach((it,i)=>{ if(it.s==='s'&&NOSHIELD[c.cls]) return; const sl=it.s==='r'?(!c.eq.r1?'r1':!c.eq.r2?'r2':(itemScore(c.eq.r1,c.cls)<=itemScore(c.eq.r2,c.cls)?'r1':'r2')):it.s;
+            if(!(sl in c.eq)) return; const gain=itemScore(it,c.cls)-itemScore(c.eq[sl],c.cls); if(gain>.5&&(!best||gain>best.gain)) best={i,sl,gain}; });
+          if(!best) break; const it=c.bag[best.i],old=c.eq[best.sl]; c.eq[best.sl]=it; c.bag.splice(best.i,1); if(old) c.bag.push(old); changed.push(itemName(it,c.cls)); }
+        P.stats=calcStats(c); c.hp=Math.min(c.hp,P.stats.maxHP); c.mp=Math.min(c.mp,P.stats.maxMP); this.me(P);
+        return this.logTo(P,changed.length?`換上更好的裝備：${changed.join('、')}`:'身上已經是最好的裝備了。'); }
       case 'equip': { const i=msg.i|0,it=c.bag[i]; if(!it) return; if(it.s==='s'&&NOSHIELD[c.cls]) return this.logTo(P,`${CLS[c.cls].n}不能使用盾牌。`);
         const sl=eqSlotFor(c.eq,it),old=c.eq[sl]; c.eq[sl]=it; c.bag.splice(i,1); if(old) c.bag.push(old); P.stats=calcStats(c); c.hp=Math.min(c.hp,P.stats.maxHP); c.mp=Math.min(c.mp,P.stats.maxMP); this.me(P); return; }
       case 'unequip': { const sl=String(msg.s); if(sl==='w'||sl==='a'||!(sl in c.eq)||!c.eq[sl]) return; if(c.bag.length>=BAGMAX) return this.logTo(P,'背包滿了。');

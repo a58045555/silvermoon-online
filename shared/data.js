@@ -193,6 +193,10 @@ export const SHOP_GEAR = [['w',1],['a',1],['h',1],['g',1],['b',1],['c',1],['s',1
 export function itemBaseName(it,cls){ if(!it)return'（無）'; if(it.leg)return it.s==='w'?(LEGEND_W[cls]||LEGEND_W.knight):it.leg; if(it.s==='w')return(WN[cls]||WN.knight)[it.t]; if(it.s==='r')return(RINGS[it.t]||RINGS[0]).n; return ARM[it.s]?ARM[it.s].n[it.t]:'?'; }
 export function itemName(it,cls){ if(!it)return'（無）'; return(it.en?'+'+it.en+' ':'')+itemBaseName(it,cls); }
 export function itemStat(it){ const b=itemBase(it),out=[]; for(const k of ['atk','def','hp','mp','str','dex','con','int','wis'])if(b[k])out.push(BONK[k]+' +'+b[k]); return out.join('、')||'無屬性'; }
+// rough gear score for "equip better gear": weights the class's main stats
+const MAINST={knight:['str','con'],ranger:['dex'],mage:['int','wis'],darkelf:['str','dex']};
+export function itemScore(it,cls){ if(!it) return 0; const b=itemBase(it),M=MAINST[cls]||[]; let v=(b.atk||0)*3+(b.def||0)*3+(b.hp||0)*.1+(b.mp||0)*.06;
+  for(const k of ['str','dex','con','int','wis']) v+=(b[k]||0)*(M.includes(k)?2.2:.8); return v; }
 export function eqSlotFor(eq,it){ if(it.s==='r')return!eq.r1?'r1':!eq.r2?'r2':'r1'; return it.s; }
 export function makeItem(s,t,R=Math.random){ const ri=(a,b)=>a+Math.floor(R()*(b-a+1)),pick=a=>a[Math.floor(R()*a.length)];
   t=Math.max(0,Math.min(4,t)); const it={s,t,en:0}; if(s==='r')it.t=ri(0,3);

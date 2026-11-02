@@ -580,6 +580,7 @@ function enterMapClient(id,x,y){
   myTargetId=null; pendingAct=null; marker=null; banner={t:3,a:cur.name,b:cur.tip||(id==='village'?'安全區・不能 PK':'')}; SFX.portal();
   if(ME){ P=mkPlayer([ME.id,ME.name,ME.cls,ME.g,x,y,100,ME.lv,0,ME.clan||'',2,ME.eq?.w?.en||0]); }
   closePanel(true);
+  if(id==='village') setTimeout(onArriveVillage,800);
 }
 function mkPlayer(a){ const e={id:a[0],isPlayer:true,name:a[1],cls:a[2],g:a[3],x:a[4],y:a[5],rx:a[4],ry:a[5],hpPct:a[6],lv:a[7],flags:a[8],clan:a[9],face:a[10],dir:faceDir(a[10]),eq:{w:{en:a[11]}},walk:0,atkVis:0,lunge:0,hurt:0,dead:0};
   players.set(e.id,e); ents.set(e.id,e); return e; }
@@ -665,7 +666,7 @@ function onMe(c){
   if(P){ P.eq.w.en=c.eq.w.en|0; }
   if(prevLv&&c.lv>prevLv){ SFX.level(); const L=SKILLS[c.cls].find(k=>k.lv>prevLv&&k.lv<=c.lv); if(L){ banner={t:3.5,a:'學會新技能',b:`${L.n}：${L.d}`}; } }
   (c.cds||[]).forEach((v,i)=>cdEnd[i]=now+v);
-  if(curPanel&&['bag','shop','smith','social','quest','guard'].includes(curPanel)) openPanel(curPanel,curArg,true);
+  if(curPanel&&['bag','shop','smith','social','quest','guard','auto'].includes(curPanel)) openPanel(curPanel,curArg,true);
   hud(true);
   $('#bPk').classList.toggle('hot',!!c.pk);
 }
@@ -878,16 +879,24 @@ $('#bChat').onclick=()=>{ document.body.classList.toggle('chatOpen'); if(documen
 $('#bQuest').onclick=()=>{audioOn();openPanel('quest');};
 $('#bRet').onclick=()=>{audioOn();if(cur?.id==='village')return addLog('你已經在村子裡了。');send({t:'ret'});};
 $('#bBag').onclick=()=>{audioOn();bagSel=null;openPanel('bag');};
-$('#bAuto').onclick=()=>{audioOn();toggleAuto();};
+$('#bAuto').onclick=()=>{audioOn(); if(auto) toggleAuto(false); else openPanel('auto'); };
 $('#bSocial').onclick=()=>{audioOn();openPanel('social');};
 $('#bPk').onclick=()=>{ if(!ME) return; if(ME.lv<PK_MIN_LV) return addLog(`Lv.${PK_MIN_LV} 以上才能開啟 PK。`); send({t:'pk',on:!ME.pk}); };
 
 /* ---------- auto hunt (client brain, server validates everything) ---------- */
-const autoBlk=new Map(); let autoT=0, potT=0, skillT=0, tgtSince=0, tgtHp=0;
-function toggleAuto(){ auto=!auto; $('#bAuto').classList.toggle('on',auto); addLog(auto?'自動狩獵開啟：會自動找怪、放技能、低血喝水。':'自動狩獵關閉。'); }
+const autoBlk=new Map(); let autoT=0, potT=0, skillT=0, tgtSince=0, tgtHp=0, autoOrigin=null, resupply=false;
+// settings, saved per browser
+const AS_DEF={targets:{},hp:45,mp:20,sk:[1,1,1],pick:0,range:0,noPot:'ret',bagFull:'skip',buy:30,boss:0};
+let AS=Object.assign({},AS_DEF); try{ Object.assign(AS,JSON.parse(localStorage.getItem('sm_auto')||'{}')); }catch{}
+function saveAS(){ try{ localStorage.setItem('sm_auto',JSON.stringify(AS)); }catch{} }
+function toggleAuto(force){ auto=force!=null?force:!auto; $('#bAuto').classList.toggle('on',auto); autoOrigin=auto&&P?{x:P.x,y:P.y,map:cur.id}:null;
+  addLog(auto?'掛機開始。':'掛機停止。'); if(!auto){ myTargetId=null; } }
+function mapMobs(id){ const d=MAPDEF[id]; if(!d||!d.mobs) return []; return [...d.mobs,...(d.boss?[d.boss]:[])]; }
+function wantMob(k){ const t=AS.targets[cur.id]; return !t||t.includes(k); }
+function wantLoot(L){ if(AS.pick===3) return false; if(L.it){ if(ME.bag.length>=BAGMAX) return false; return (L.q|0)>=[0,1,2][AS.pick]; } return true; }
 let dodgeT=0;
 function inCircle(x,y){ return tgs.some(g=>Math.hypot(x-g.x,y-g.y)<=g.r+.4); }
-function autoSkill(t){ const L=SKILLS[ME.cls],c=ME.cls,hp=ME.hp/ME.maxHP; const ok=i=>ME.lv>=L[i].lv&&ME.mp>=L[i].mp&&cdEnd[i]<=now;
+function autoSkill(t){ const L=SKILLS[ME.cls],c=ME.cls,hp=ME.hp/ME.maxHP; const ok=i=>AS.sk[i]&&ME.lv>=L[i].lv&&ME.mp>=L[i].mp&&cdEnd[i]<=now;
   const inR=cheb(P,t)<=(CLS[c].range<=1?1:CLS[c].range); const near=cur.mobs.filter(m=>Math.hypot(m.x-P.x,m.y-P.y)<=(c==='mage'?2.6:1.6)).length; const big=t.boss||t.hp>ME.atk*3;
   if(c==='mage'&&ok(2)&&hp<.55) return 2;
   if(c!=='mage'&&ok(2)&&(t.boss||hp<.6)) return 2;
@@ -896,28 +905,54 @@ function autoSkill(t){ const L=SKILLS[ME.cls],c=ME.cls,hp=ME.hp/ME.maxHP; const 
   if(c==='darkelf'&&ok(1)&&inR&&big&&!(t.psEnd>now)) return 1;
   if(ok(0)&&inR&&(t.boss||t.hp>ME.atk*2)) return 0;
   return -1; }
+function goHome(why){ if(ME.inv.ret){ send({t:'ret'}); resupply=true; } toggleAuto(false); addLog(why); }
 function autoThink(dt){ if(!auto||!ME||!P||P.dead||joyHold>0) return; autoT-=dt; potT-=dt; skillT-=dt; dodgeT-=dt;
   // step out of red circles
   if(dodgeT<=0&&inCircle(P.x,P.y)){ let best=null,bd=1e9; for(let dx=-3;dx<=3;dx++)for(let dy=-3;dy<=3;dy++){ const x=P.x+dx,y=P.y+dy; if(x<0||y<0||x>=cur.W||y>=cur.H||cur.blk[y*cur.W+x]||inCircle(x,y)) continue; const d=Math.hypot(dx,dy); if(d<bd){bd=d;best=[x,y];} }
     if(best){ dodgeT=.6; myTargetId=null; send({t:'move',x:best[0],y:best[1]}); return; } }
   if(dodgeT>0) return;
-  const hp=ME.hp/ME.maxHP;
-  if(potT<=0&&hp<.45){ if(ME.inv.big&&hp<.3){send({t:'use',k:'big'});potT=.6;} else if(ME.inv.pot){send({t:'use',k:'pot'});potT=.6;} else if(ME.inv.big){send({t:'use',k:'big'});potT=.6;} }
-  if(potT<=0&&ME.mp<ME.maxMP*.2&&ME.inv.blue){send({t:'use',k:'blue'});potT=.6;}
+  const hp=ME.hp/ME.maxHP, th=AS.hp/100;
+  if(potT<=0&&hp<th){ if(ME.inv.big&&hp<th-.15){send({t:'use',k:'big'});potT=.6;} else if(ME.inv.pot){send({t:'use',k:'pot'});potT=.6;} else if(ME.inv.big){send({t:'use',k:'big'});potT=.6;} }
+  if(potT<=0&&ME.mp<ME.maxMP*AS.mp/100&&ME.inv.blue){send({t:'use',k:'blue'});potT=.6;}
   if(cur.id==='village') return;
-  if(hp<.3&&!ME.inv.pot&&!ME.inv.big){ if(ME.inv.ret){ send({t:'ret'}); toggleAuto(); addLog('藥水用完了，已自動回村。'); } return; }
+  if(!ME.inv.pot&&!ME.inv.big&&AS.noPot==='ret'&&hp<.5) return goHome('紅色藥水用完了，自動回村。');
+  if(ME.bag.length>=BAGMAX&&AS.bagFull==='ret') return goHome('背包滿了，自動回村。');
   const t=myTarget();
   if(t){ if(t.hp!==tgtHp){tgtHp=t.hp;tgtSince=now;} if(now-tgtSince>7){ autoBlk.set(t.id,now+10); myTargetId=null; send({t:'stop'}); }
     if(skillT<=0){ const i=autoSkill(t); if(i>=0){ send({t:'skill',i}); skillT=.5; } }
     return; }
+  const inRange=(x,y)=>!AS.range||!autoOrigin||autoOrigin.map!==cur.id||Math.hypot(x-autoOrigin.x,y-autoOrigin.y)<=AS.range;
   // pick up loot before looking for the next fight
-  { let bl=null,bld=11; for(const L of loot.values()){ if(L.tries>5||!canPickLoot(L)||(L.it&&ME.bag.length>=BAGMAX)) continue; const d=Math.hypot(L.x-P.x,L.y-P.y); if(d<bld){bld=d;bl=L;} }
+  { let bl=null,bld=11; for(const L of loot.values()){ if(L.tries>5||!canPickLoot(L)||!wantLoot(L)||!inRange(L.x,L.y)) continue; const d=Math.hypot(L.x-P.x,L.y-P.y); if(d<bld){bld=d;bl=L;} }
     if(bl&&autoT<=0){ bl.tries++; autoT=.8; send({t:'pick',id:bl.id}); return; } if(bl) return; }
   if(autoT>0) return; autoT=.4;
-  let best=null,bd=1e9; for(const m of cur.mobs){ if(autoBlk.get(m.id)>now) continue; const t2=MT[m.k]; if(m.boss&&(ME.lv<t2.lv||hp<.7)) continue; if(t2.lv>ME.lv+5) continue;
+  let best=null,bd=1e9; for(const m of cur.mobs){ if(autoBlk.get(m.id)>now||m.nm&&!m.boss&&false) continue; const t2=MT[m.k];
+    if(!wantMob(m.k)||!inRange(m.x,m.y)) continue;
+    if(m.boss&&(!AS.boss&&(ME.lv<t2.lv||hp<.7))) continue; if(!m.boss&&t2.lv>ME.lv+5&&!AS.targets[cur.id]) continue;
     const d=Math.hypot(m.x-P.x,m.y-P.y)+(m.boss?6:0); if(d<bd){bd=d;best=m;} }
   if(best){ myTargetId=best.id; tgtSince=now; tgtHp=best.hp; send({t:'attack',id:best.id}); }
+  else if(AS.range&&autoOrigin&&autoOrigin.map===cur.id&&Math.hypot(P.x-autoOrigin.x,P.y-autoOrigin.y)>3){ send({t:'move',x:autoOrigin.x,y:autoOrigin.y}); autoT=1.5; }
+  else { // nothing we want in sight: wander to look for it
+    const ox=AS.range&&autoOrigin?autoOrigin.x:P.x, oy=AS.range&&autoOrigin?autoOrigin.y:P.y, r=AS.range||12;
+    for(let i=0;i<20;i++){ const x=Math.round(ox+rnd(-r,r)),y=Math.round(oy+rnd(-r,r)); if(x<1||y<1||x>=cur.W-1||y>=cur.H-1||cur.blk[y*cur.W+x]||cur.portals.some(p=>Math.abs(p.x-x)<=1&&Math.abs(p.y-y)<=1)) continue;
+      send({t:'move',x,y}); autoT=3; break; } }
 }
+// after returning home: restock red potions automatically
+function onArriveVillage(){ if(!resupply||!ME) return; resupply=false; if(AS.buy>0){ const need=Math.max(0,AS.buy-(ME.inv.pot||0)),can=Math.floor(ME.gold/20),q=Math.min(need,can); if(q>0){ send({t:'buy',k:'pot',q}); addLog(`自動補給：買了 ${q} 瓶紅色藥水。`); } } }
+function autoPanelHTML(){ const id=cur&&MAPDEF[cur.id]?.mobs?cur.id:(autoOrigin?.map||'forest'), list=mapMobs(id), sel=AS.targets[id], L=SKILLS[ME.cls];
+  const chip=(on,attr,txt)=>`<button class="btn chip ${on?'on':''}" ${attr}>${txt}</button>`;
+  const opt=(key,vals,labels)=>vals.map((v,i)=>chip(AS[key]===v,`data-as="${key}" data-v="${v}"`,labels[i])).join('');
+  return `<button class="btn wide ${auto?'hot':'on'}" data-act="autogo" style="margin-bottom:8px">${auto?'停止掛機':'開始掛機'}</button>
+  <div class="sect">要打的怪（${MAPDEF[id].name}）</div><div class="chips">${chip(!sel,'data-tgt="*"','全部')}${list.map(k=>chip(!sel||sel.includes(k),`data-tgt="${k}"`,`${MT[k].boss?'【王】':''}${MT[k].n} <small>Lv.${MT[k].lv}</small>`)).join('')}</div>
+  <div class="chips" style="margin-top:4px">${chip(AS.boss,'data-as="boss" data-v="tog"','主動打 Boss')}</div>
+  <div class="sect">活動範圍</div><div class="chips">${opt('range',[0,8,15],['不限','開始位置 8 格內','15 格內'])}</div>
+  <div class="sect">喝紅水（HP 低於）</div><div class="chips">${opt('hp',[30,45,60,75],['30%','45%','60%','75%'])}</div>
+  <div class="sect">喝藍水（MP 低於）</div><div class="chips">${opt('mp',[0,20,40],['不喝','20%','40%'])}</div>
+  <div class="sect">使用技能</div><div class="chips">${L.map((k,i)=>chip(AS.sk[i],`data-sk="${i}"`,`${k.n}${ME.lv<k.lv?` <small>Lv.${k.lv}</small>`:''}`)).join('')}</div>
+  <div class="sect">撿東西</div><div class="chips">${opt('pick',[0,1,2,3],['全部','魔法以上裝備','稀有以上裝備','不撿'])}</div><p class="ds">藥水、卷軸一律會撿（選「不撿」除外）。</p>
+  <div class="sect">紅水用完時</div><div class="chips">${opt('noPot',['ret','cont'],['回村','繼續打'])}</div>
+  <div class="sect">背包滿時</div><div class="chips">${opt('bagFull',['skip','ret'],['不撿裝備','回村'])}</div>
+  <div class="sect">回村後自動補紅水到</div><div class="chips">${opt('buy',[0,30,60,100],['不補','30 瓶','60 瓶','100 瓶'])}</div>`; }
 
 /* ---------- chat & log ---------- */
 const CHN={sys:'系統',all:'全頻',map:'地圖',party:'隊伍',clan:'血盟',w:'私訊'};
@@ -934,7 +969,7 @@ let toastT=null; function toast(msg){ const el=$('#toast'); el.textContent=msg; 
 
 /* ---------- panels ---------- */
 let curPanel=null, curArg=null;
-const PT={quest:'任務',story:'故事',shop:'雜貨商 莉娜',smith:'鐵匠 巴爾克',bag:'角色',guard:'守衛 艾德',social:'社交',player:'玩家',clan:'血盟',rank:'排行榜',who:'在線玩家',ask:'邀請',trade:'交易'};
+const PT={auto:'掛機設定',quest:'任務',story:'故事',shop:'雜貨商 莉娜',smith:'鐵匠 巴爾克',bag:'角色',guard:'守衛 艾德',social:'社交',player:'玩家',clan:'血盟',rank:'排行榜',who:'在線玩家',ask:'邀請',trade:'交易'};
 function openPanel(k,arg,keep){ if(keep&&curPanel!==k) return; curPanel=k; curArg=arg; const body=$('#pBody'),st=keep?body.scrollTop:0; $('#pTitle').textContent=k==='player'&&arg?arg.name:PT[k]; body.innerHTML=panelHTML(k,arg); $('#overlay').hidden=false; body.scrollTop=st; }
 function closePanel(force){ if(curPanel==='trade'&&!force) send({t:'tcancel'}); $('#overlay').hidden=true; curPanel=null; armed=null; }
 $('#pClose').onclick=()=>closePanel();
@@ -943,7 +978,7 @@ function panelHTML(k,arg){ const c=ME; if(!c) return '';
   if(k==='guard'){ const q=QUESTS[c.mq]; const qb=q&&q.type==='talk'?`<button class="btn wide on" data-act="qtalk">${c.mq===0?'「我來幫忙。」（接受主線）':'回報：'+esc(q.n)}</button>`:''; return qb+`<p>艾德：「現在村子裡不只你一個冒險者了。記住：村莊是安全區，出了傳送陣就可能被人攻擊。」</p>
     <table><tr><td>哭泣森林</td><td>Lv.1～10・Boss 腐木樹妖</td></tr><tr><td>骸骨荒原</td><td>Lv.10～18・Boss 白骨巨像</td></tr><tr><td>熔岩洞窟</td><td>Lv.18 以上・Boss 熾焰領主</td></tr></table>
     <p style="margin-top:10px">「Lv.${PK_MIN_LV} 以上可以開 PK。殺死沒有紅名的人會變紅名，紅名死掉會掉裝備。打怪可以慢慢把正義值洗回來。」</p><p class="ds">你的正義值：${c.lawful}</p>`; }
-  if(k==='shop') return `<p>莉娜：「藥水多帶一點，外面的人跟怪一樣兇。」</p>`+SHOP.map(s=>`<div class="row"><div class="bcell" style="width:40px;flex:none">${icon(INVI[s.k])}</div><div class="info"><div class="nm">${s.n}</div><div class="ds">${s.d}・${s.p} 金幣・持有 ${c.inv[s.k]||0}</div></div>${s.q.map(q=>`<button class="btn" data-buy="${s.k}" data-q="${q}" ${c.gold<s.p*q?'disabled':''}>買 ${q}</button>`).join('')}</div>`).join('')+`<div class="sect">你的金幣：${c.gold.toLocaleString()}</div>`;
+  if(k==='shop') return `<p>莉娜：「藥水多帶一點，外面的人跟怪一樣兇。」</p>`+SHOP.map(s=>`<div class="row"><div class="bcell" style="width:40px;flex:none">${icon(INVI[s.k])}</div><div class="info"><div class="nm">${s.n}</div><div class="ds">${s.d}・${s.p} 金幣・持有 ${c.inv[s.k]||0}</div></div>${s.q.map(q=>`<button class="btn" data-buy="${s.k}" data-q="${q}" ${c.gold<s.p*q?'disabled':''}>買 ${q}</button>`).join('')}</div>`).join('')+`<div class="sect">賣東西（背包 ${c.bag.length}/${BAGMAX}）</div>${sellTools(c)}<div class="sect">你的金幣：${c.gold.toLocaleString()}</div>`;
   if(k==='smith'){ const fx=arg&&arg.c?arg:null;
     const g=sl=>{const it=c.eq[sl];if(!it||['n','r1','r2'].includes(sl))return'';const kind=sl==='w'?'w':'a',sc=kind==='w'?'ws':'as',r=enchRate(kind,it.en),risky=r<1,have=c.inv[sc]||0;
       const label=armed===sl?`再按一次確定衝 +${it.en+1}（失敗會爆）`:`使用${INV_N[sc]}（持有 ${have}）`;
@@ -953,15 +988,15 @@ function panelHTML(k,arg){ const c=ME; if(!c) return '';
   if(k==='bag'){ const gs=c.gear||{};
     let det=''; if(bagSel){ const it=bagSel.from==='eq'?c.eq[bagSel.k]:c.bag[bagSel.k]; if(it){ const cmp=bagSel.from==='bag'?c.eq[eqSlotFor(c.eq,it)]:null,ban=it.s==='s'&&NOSHIELD[c.cls];
       det=`<div class="detail"><div class="gname ${itemCls(it)}">${itemName(it,c.cls)}</div><div class="gstat">${SLOTN[it.s]}・${itemStat(it)}${it.q===2?'・稀有':it.q===1?'・魔法':''}</div>${cmp?`<div class="ds">目前裝備：${itemName(cmp,c.cls)}（${itemStat(cmp)}）</div>`:''}${ban?`<div class="ds" style="color:var(--danger)">${CLS[c.cls].n}不能使用盾牌</div>`:''}
-      <div class="acts2">${bagSel.from==='bag'?`<button class="btn" data-eq="${bagSel.k}" ${ban?'disabled':''}>裝備</button><button class="btn" data-sell="${bagSel.k}" ${cur.id!=='village'?'disabled':''}>賣出 ${sellP(it)}</button>`:(bagSel.k==='w'||bagSel.k==='a'?'<span class="ds">武器和盔甲不能空著</span>':`<button class="btn" data-uneq="${bagSel.k}">卸下</button>`)}</div></div>`; } }
+      <div class="acts2">${bagSel.from==='bag'?`<button class="btn" data-eq="${bagSel.k}" ${ban?'disabled':''}>裝備</button><button class="btn ${it.lock?'on':''}" data-lock="${bagSel.k}">${it.lock?'已鎖定':'鎖定'}</button><button class="btn" data-sell="${bagSel.k}" ${cur.id!=='village'?'disabled':''}>賣出 ${sellP(it)}</button>`:(bagSel.k==='w'||bagSel.k==='a'?'<span class="ds">武器和盔甲不能空著</span>':`<button class="btn" data-uneq="${bagSel.k}">卸下</button>`)}</div></div>`; } }
     const eqg=SLOTS.map(([sl,lab])=>{const it=c.eq[sl];return`<button class="slot ${bagSel&&bagSel.from==='eq'&&bagSel.k===sl?'sel':''}" data-pick="eq:${sl}" aria-label="${lab}">${it?itIcon(it):''}<span class="lb">${lab}</span>${it&&it.en?`<span class="en">+${it.en}</span>`:''}</button>`;}).join('');
-    const bg=c.bag.map((it,i)=>`<button class="bcell q${it.q|0} ${bagSel&&bagSel.from==='bag'&&bagSel.k===i?'sel':''}" data-pick="bag:${i}" aria-label="${esc(itemName(it,c.cls))}">${itIcon(it)}${it.en?`<span class="en">+${it.en}</span>`:''}</button>`).join('');
+    const bg=c.bag.map((it,i)=>`<button class="bcell q${it.q|0} ${bagSel&&bagSel.from==='bag'&&bagSel.k===i?'sel':''}" data-pick="bag:${i}" aria-label="${esc(itemName(it,c.cls))}">${itIcon(it)}${it.en?`<span class="en">+${it.en}</span>`:''}${it.lock?'<span class="lk">鎖</span>':''}</button>`).join('');
     const st=Object.keys(STATN).map(k=>`<div>${STATN[k]} <span class="ds">${STATD[k]}</span></div><div class="v">${c[k]}${(gs[k]||0)?`<span class="ds"> (裝備+${gs[k]})</span>`:''}</div><button class="btn" data-stat="${k}" ${c.pts>0?'':'disabled'}>＋</button>`).join('');
     return `<table><tr><td>${esc(c.name)}</td><td>${CLS[c.cls].n}（${c.g==='f'?'女':'男'}）Lv.${c.lv}（${c.exp}/${c.need}）</td></tr><tr><td>正義值</td><td style="color:${c.lawful<0?'var(--danger)':'inherit'}">${c.lawful}${c.lawful<0?'（紅名）':''}</td></tr></table>
     <div class="sect">裝備</div><div class="eqgrid">${eqg}</div>${bagSel&&bagSel.from==='eq'?det:''}
     <div class="sect">能力值　剩餘點數 <span style="color:${c.pts?'var(--gold)':'var(--dim)'}">${c.pts}</span></div><div class="stats">${st}</div>${c.pts?`<button class="btn" style="width:100%;margin-top:6px" data-stat="auto">把點數全部加到主屬性（${CLS[c.cls].main}）</button>`:''}
     <div class="derived"><span>攻擊力<b>${c.atk}</b></span><span>防禦力<b>${c.def}</b></span><span>HP<b>${c.maxHP}</b></span><span>MP<b>${c.maxMP}</b></span><span>閃避<b>${Math.round(c.dodge*100)}%</b></span><span>爆擊<b>${Math.round(c.crit*100)}%</b></span></div>
-    <div class="sect">背包（${c.bag.length}/${BAGMAX}）</div>${c.bag.length?`<div class="bgrid">${bg}</div>`:'<p class="ds">打怪會掉裝備，也可以跟鐵匠買。</p>'}${bagSel&&bagSel.from==='bag'?det:''}
+    <div class="sect">背包（${c.bag.length}/${BAGMAX}）</div>${sellTools(c)}${c.bag.length?`<div class="bgrid">${bg}</div>`:'<p class="ds">打怪會掉裝備，也可以跟鐵匠買。</p>'}${bagSel&&bagSel.from==='bag'?det:''}
     <div class="sect">道具</div>${Object.keys(INV_N).map(k=>`<div class="row"><div class="bcell" style="width:40px;flex:none">${icon(INVI[k])}</div><div class="info"><div class="nm">${INV_N[k]}</div></div><span class="num">${c.inv[k]||0}</span>${['pot','big','blue'].includes(k)?`<button class="btn" data-use="${k}" ${c.inv[k]?'':'disabled'}>使用</button>`:''}</div>`).join('')}
     <div class="sect">設定</div><button class="btn wide" data-act="mute">${muted?'開啟音效':'關閉音效'}</button>
     <button class="btn wide ${hideOthers?'on':''}" data-act="hide" style="margin-top:6px">${hideOthers?'其他玩家：已隱藏（隊友仍顯示）':'隱藏其他玩家'}</button>
@@ -978,6 +1013,7 @@ function panelHTML(k,arg){ const c=ME; if(!c) return '';
     <div class="row2"><button class="btn" data-pact="pinvite">邀請組隊</button><button class="btn" data-pact="treq">交易</button></div>
     <div class="row2"><button class="btn" data-pact="whisper">私訊</button>${c.clanLeader&&!p.clan?`<button class="btn" data-pact="cinvite">邀請入盟</button>`:''}</div>
     <p class="ds">要攻擊這個玩家，先在「社交」開啟 PK 模式。</p>`; }
+  if(k==='auto') return autoPanelHTML();
   if(k==='story') return `<div class="sect">${esc(arg.title||'')}</div><div class="story">${esc(arg.text||'')}</div>${arg.reward?`<p class="ds">獲得：${esc(arg.reward)}</p>`:''}<button class="btn wide" data-act="qpanel">查看任務</button>`;
   if(k==='quest'){ const q=QUESTS[c.mq];
     const main=q?`<div class="sect">主線・${esc(q.n)}</div><div class="story">${esc(q.story)}</div><p><b>目標</b>：${esc(q.d)}</p>${q.type!=='talk'?`<div class="pbar"><i style="width:${Math.round(c.mqp/q.n*100)}%"></i></div><p class="ds">進度 ${c.mqp}/${q.n}</p>`:`<button class="btn wide on" data-act="goguard">${cur.id==='village'?'去找守衛艾德':'回村找守衛艾德'}</button>`}<p class="ds">章節 ${c.mq+1}/${QUESTS.length}</p>`:`<div class="sect">主線</div><p>你完成了「新月之誓」。北方的血月……就是另一個故事了。</p>`;
@@ -1008,6 +1044,14 @@ $('#pBody').addEventListener('submit',e=>{ e.preventDefault(); const f=e.target.
   if(f==='cnotice') send({t:'cnotice',text:v('#iNotice')});
   if(f==='tgold') send({t:'tput',gold:+v('#iTgold')||0}); });
 $('#pBody').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b||b.type==='submit'&&b.form) return; audioOn(); const D=b.dataset;
+  if(D.act==='autogo'){ closePanel(); if(cur.id==='village'){ addLog('先出村再開始掛機（掛機只在狩獵地圖運作）。'); } toggleAuto(!auto); return; }
+  if(D.tgt!=null){ const id=MAPDEF[cur.id]?.mobs?cur.id:'forest',all=mapMobs(id); if(D.tgt==='*') delete AS.targets[id]; else { let t=AS.targets[id]?[...AS.targets[id]]:[...all]; t=t.includes(D.tgt)?t.filter(x=>x!==D.tgt):[...t,D.tgt]; if(!t.length||t.length===all.length) delete AS.targets[id]; else AS.targets[id]=t; } saveAS(); return openPanel('auto'); }
+  if(D.as){ AS[D.as]=D.v==='tog'?(AS[D.as]?0:1):(isNaN(+D.v)?D.v:+D.v); saveAS(); return openPanel('auto'); }
+  if(D.sk!=null){ AS.sk[+D.sk]=AS.sk[+D.sk]?0:1; saveAS(); return openPanel('auto'); }
+  if(D.act==='sellall'){ if(armed!=='sell'+D.q){ armed='sell'+D.q; return openPanel(curPanel,curArg); } armed=null; return send({t:'sellall',q:+D.q}); }
+  if(D.act==='sortbag') return send({t:'sortbag'});
+  if(D.act==='autoequip') return send({t:'autoequip'});
+  if(D.lock!=null) return send({t:'lock',i:+D.lock});
   if(D.act==='qtalk') return send({t:'qtalk'});
   if(D.act==='qpanel') return openPanel('quest');
   if(D.act==='goguard'){ closePanel(); if(cur.id!=='village') return send({t:'ret'}); const n=cur.npcs.find(n=>n.act==='guard'); if(n){ pendingAct={x:n.x,y:n.y,act:'guard'}; send({t:'move',x:n.x,y:n.y}); } return; }
@@ -1037,6 +1081,10 @@ $('#pBody').addEventListener('click',e=>{ const b=e.target.closest('button'); if
   if(D.gear) return send({t:'buygear',s:D.gear[0],tier:+D.gear[1]});
   if(D.ench){ const sl=D.ench,it=ME.eq[sl],r=enchRate(sl==='w'?'w':'a',it.en); if(r<1&&armed!==sl){ armed=sl; return openPanel('smith'); } armed=null; return send({t:'enchant',s:sl}); }
 });
+function sellTools(c){ const town=cur.id==='village', a=q=>armed==='sell'+q;
+  return `<div class="row2" style="margin:4px 0 6px"><button class="btn" data-act="autoequip">一鍵換上更好的裝備</button><button class="btn" data-act="sortbag">整理背包</button></div>
+  <div class="row2" style="margin:0 0 6px"><button class="btn ${a(0)?'hot':''}" data-act="sellall" data-q="0" ${town?'':'disabled'}>${a(0)?'再按一次確定':'一鍵賣普通裝備'}</button><button class="btn ${a(1)?'hot':''}" data-act="sellall" data-q="1" ${town?'':'disabled'}>${a(1)?'再按一次確定':'賣普通＋魔法'}</button></div>
+  <p class="ds">${town?'鎖定的裝備和傳說不會被賣掉。':'一鍵販賣要在村莊裡才能用。'}</p>`; }
 function showAsk(m){ SFX.portal(); openPanel('ask',m); }
 function onTrade(m){ if(m.done){ lastTrade=null; if(curPanel==='trade') closePanel(true); return; } lastTrade=m; openPanel('trade',m); }
 
@@ -1066,4 +1114,4 @@ function frame(t){ const dt=Math.min(.05,(t-last)/1000); last=t; now+=dt;
 resize();
 loadAssets().then(()=>{ connect(); requestAnimationFrame(frame); });
 // debug / test handle
-window.SM={send,toggleAuto,openPanel,get ME(){return ME;},get players(){return players;},get cur(){return cur;},get P(){return P;},get tgs(){return tgs.length;},get loot(){return loot;}};
+window.SM={send,toggleAuto,openPanel,get ME(){return ME;},get players(){return players;},get cur(){return cur;},get P(){return P;},get tgs(){return tgs.length;},get target(){const t=myTarget();return t?t.k:null;},get dbg(){return {auto,joyHold,mobs:cur.mobs.map(m=>m.k).join(','),AS,P:[P.x,P.y]};},get loot(){return loot;}};
