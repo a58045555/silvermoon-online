@@ -667,9 +667,10 @@ function drawPillars(){
 function wrapText(t,maxW){ const out=[]; let line=''; for(const ch of t){ if(ctx.measureText(line+ch).width>maxW&&line){ out.push(line); line=ch; } else line+=ch; } if(line) out.push(line); return out; }
 function drawTracker(){ if(!ME) return; const q=QUESTS[ME.mq],maxW=Math.min(220,VW*.46),rows=[];
   ctx.font='12px '+FONT; ctx.textAlign='left';
-  if(q){ rows.push(['◆ '+q.n,'#e8c46a']); for(const l of wrapText(q.d+(q.type!=='talk'?`（${ME.mqp}/${q.n}）`:''),maxW)) rows.push([l,'#ece2c8']); }
+  if(hideTrack) rows.push(['▸ 任務（點一下展開）','#9a9078']);
+  else if(q){ rows.push(['◆ '+q.n,'#e8c46a']); for(const l of wrapText(q.d+(q.type!=='talk'?`（${ME.mqp}/${q.n}）`:''),maxW)) rows.push([l,'#ece2c8']); }
   else rows.push(['◆ 主線完成','#e8c46a']);
-  if(ME.daily){ const left=ME.daily.list.filter(x=>!x.done); rows.push([left.length?`每日 ${3-left.length}/3・${left[0].d}（${left[0].p}/${left[0].n}）`:'每日任務完成 ✓',left.length?'#9fc4e0':'#7fe08a']); }
+  if(ME.daily&&!hideTrack){ const left=ME.daily.list.filter(x=>!x.done); rows.push([left.length?`每日 ${3-left.length}/3・${left[0].d}（${left[0].p}/${left[0].n}）`:'每日任務完成 ✓',left.length?'#9fc4e0':'#7fe08a']); }
   if(eclipse){ const left=Math.max(0,(eclipse.end-performance.now())/1000); if(left<=0) eclipse=null; else rows.unshift([`✦ 月蝕之夜 ${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')}・經驗 ×2`,'#ff7a8a']); }
   if(invasion){ const left=Math.max(0,(invasion.end-performance.now())/1000); rows.unshift([`⚔ 教團入侵・泉水耐久 ${invasion.hp}/100・${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')}`,invasion.hp>40?'#ffb070':'#ff5a4a']); }
   if(wboss) rows.unshift(['🔥 卡爾薩殘火甦醒中（熔岩洞窟）','#ff9a3c']);
@@ -737,6 +738,7 @@ function updateFx(dt){
 
 /* ---------- input ---------- */
 let ZOOM=1; try{ ZOOM=+localStorage.getItem('sm_zoom')||1; }catch{}
+let hideTrack=false; try{ hideTrack=localStorage.getItem('sm_track')==='0'; }catch{}
 let hideOthers=false; try{ hideOthers=localStorage.getItem('sm_hide')==='1'; }catch{}
 const isTouch=matchMedia('(pointer:coarse)').matches||('ontouchstart' in window&&navigator.maxTouchPoints>0); if(isTouch) document.body.classList.add('touch');
 function resize(){const r=$('#stage').getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1),cw=Math.max(100,r.width-4),ch=Math.max(100,r.height-4);VW=cw/ZOOM;VH=ch/ZOOM;
@@ -752,7 +754,7 @@ cv.addEventListener('pointerdown',e=>{ audioOn(); if(!P||!cur||P.dead) return;
   const r=cv.getBoundingClientRect(),wx=(e.clientX-r.left)/ZOOM+cam.x,wy=(e.clientY-r.top)/ZOOM+cam.y,u=wx-OX;
   const tx=Math.floor((u/HW+wy/HH)/2),ty=Math.floor((wy/HH-u/HW)/2);
   const sx0=(e.clientX-r.left)/ZOOM,sy0=(e.clientY-r.top)/ZOOM;
-  if(trackRect&&sx0>=trackRect.x&&sx0<=trackRect.x+trackRect.w&&sy0>=trackRect.y&&sy0<=trackRect.y+trackRect.h){ openPanel('quest'); return; }
+  if(trackRect&&sx0>=trackRect.x&&sx0<=trackRect.x+trackRect.w&&sy0>=trackRect.y&&sy0<=trackRect.y+trackRect.h){ hideTrack=!hideTrack; try{localStorage.setItem('sm_track',hideTrack?'0':'1');}catch{} return; }
   pendingAct=null; marker=null;
   let best=null,bd=30; for(const m of cur.mobs){ const d=Math.hypot(fx(m)-wx,fy(m)-(m.boss?40:14)-wy)/(m.boss?2.2:1); if(d<bd){bd=d;best=m;} }
   for(const p of players.values()){ if(p===P||(hideOthers&&!p.party)) continue; const d=Math.hypot(fx(p)-wx,fy(p)-28-wy); if(d<bd){bd=d;best=p;} }
@@ -889,6 +891,7 @@ function panelHTML(k,arg){ const c=ME; if(!c) return '';
     <div class="sect">道具</div>${Object.keys(INV_N).map(k=>`<div class="row"><div class="bcell" style="width:40px;flex:none">${icon(INVI[k])}</div><div class="info"><div class="nm">${INV_N[k]}</div></div><span class="num">${c.inv[k]||0}</span>${['pot','big','blue'].includes(k)?`<button class="btn" data-use="${k}" ${c.inv[k]?'':'disabled'}>使用</button>`:''}</div>`).join('')}
     <div class="sect">設定</div><button class="btn wide" data-act="mute">${muted?'開啟音效':'關閉音效'}</button>
     <button class="btn wide ${hideOthers?'on':''}" data-act="hide" style="margin-top:6px">${hideOthers?'其他玩家：已隱藏（隊友仍顯示）':'隱藏其他玩家'}</button>
+    <button class="btn wide ${hideTrack?'on':''}" data-act="track" style="margin-top:6px">${hideTrack?'任務提醒：已收起（點左上角也能切換）':'收起左上角任務提醒'}</button>
     <button class="btn wide" data-act="zoom" style="margin-top:6px">畫面縮放：${Math.round(ZOOM*100)}%</button>`; }
   if(k==='social'){ const party=c.party;
     return `<div class="sect">PK 模式</div><button class="btn wide ${c.pk?'hot':''}" data-act="pk">${c.pk?'PK 模式開啟中（點這裡關閉）':'開啟 PK 模式'}</button><p class="ds">Lv.${PK_MIN_LV} 以上可用。村莊是安全區。殺死非紅名玩家會讓你變紅名。</p>
@@ -935,6 +938,7 @@ $('#pBody').addEventListener('click',e=>{ const b=e.target.closest('button'); if
   if(D.act==='qpanel') return openPanel('quest');
   if(D.act==='goguard'){ closePanel(); if(cur.id!=='village') return send({t:'ret'}); const n=cur.npcs.find(n=>n.act==='guard'); if(n){ pendingAct={x:n.x,y:n.y,act:'guard'}; send({t:'move',x:n.x,y:n.y}); } return; }
   if(D.act==='hide'){ hideOthers=!hideOthers; try{localStorage.setItem('sm_hide',hideOthers?'1':'0');}catch{} return openPanel('bag'); }
+  if(D.act==='track'){ hideTrack=!hideTrack; try{localStorage.setItem('sm_track',hideTrack?'0':'1');}catch{} return openPanel('bag'); }
   if(D.act==='zoom'){ $('#bZoom').onclick(); return openPanel('bag'); }
   if(D.act==='mute'){ muted=!muted; return openPanel('bag'); }
   if(D.act==='pk') return $('#bPk').onclick();
