@@ -52,7 +52,10 @@ body{height:100%;margin:0;background:var(--bg);color:var(--parch);font-family:va
 #joyK{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(232,196,106,.35);border:2px solid rgba(232,196,106,.7)}
 body.touch{padding-left:max(4px,env(safe-area-inset-left,0px));padding-right:max(4px,env(safe-area-inset-right,0px))}
 body.touch #app{gap:4px;padding-block:4px}
-body.touch #joy{display:block}
+body.touch #joy{display:block;pointer-events:none;opacity:.55;transition:opacity .15s}
+body.touch #joy.act{opacity:1}
+#joyZone{display:none;position:absolute;left:0;bottom:0;width:52%;height:46%;z-index:2;touch-action:none}
+body.touch #joyZone{display:block}
 body.touch #log{bottom:150px;width:64%;max-height:82px}
 body.touch #fChat{display:none}
 body.touch.chatOpen #fChat{display:flex}
@@ -196,7 +199,7 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
   </div>
   <div id="stage"><canvas id="cv"></canvas>
     <div id="log" aria-live="polite"></div>
-    <div id="joy" aria-hidden="true"><div id="joyK"></div></div>
+    <div id="joyZone" aria-hidden="true"></div><div id="joy" aria-hidden="true"><div id="joyK"></div></div>
     <div class="skpad">
       <button class="btn" id="bPot"><i class="uic" style="--i:13"></i><small id="cPot">×0</small></button>
       <button class="btn sk" id="bS2"><i class="uic ski"></i><span class="sn">技能</span><small></small><i class="cdv"></i></button>

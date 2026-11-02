@@ -323,7 +323,7 @@ function updateFx(dt){
   for(const m of cur.mobs) if(m.psEnd>now&&Math.random()<dt*5) part(fx(m)+rnd(-8,8),bodyY(m),{vx:rnd(-6,6),vy:rnd(-40,-20),g:0,c:pick(['#9be06a','#5aa03a']),life:.6,s:3});
   // hits whose target vanished before the projectile landed
   banner.t-=dt; shake-=dt; if(shake<=0)shakeMag=0; hurtFlash-=dt;
-  for(const e of ents.values()){ const sp=Math.min(1,dt*(e.isPlayer?11:8)); const mv=Math.abs(e.x-e.rx)+Math.abs(e.y-e.ry)>.05; e.rx+=(e.x-e.rx)*sp; e.ry+=(e.y-e.ry)*sp;
+  for(const e of ents.values()){ const sp=Math.min(1,dt*(e===P?15:e.isPlayer?11:8)); const mv=Math.abs(e.x-e.rx)+Math.abs(e.y-e.ry)>.05; e.rx+=(e.x-e.rx)*sp; e.ry+=(e.y-e.ry)*sp;
     e.hurt-=dt; if(e.isPlayer){ e.atkVis-=dt; e.lunge-=dt; if(mv)e.walk+=dt; } else { e.kb=Math.max(0,(e.kb||0)-dt*6); e.atkAnim-=dt; e.mAtk=(e.mAtk||0)-dt; e.lg-=dt; } }
   for(const c of cur.corpses)c.t+=dt; cur.corpses=cur.corpses.filter(c=>c.t<.6);
   if(cur.id==='forest'&&Math.random()<dt*2.5)part(cam.x+rnd(0,VW),cam.y-4,{vx:rnd(10,30),vy:rnd(20,40),g:0,c:pick(['#6a9a40','#8ab050','#c8a040']),life:4,s:3,type:'leaf'});
@@ -383,23 +383,25 @@ window.addEventListener('keydown',e=>{ if(!inGame||!P||e.target.tagName==='INPUT
 window.addEventListener('keyup',e=>{ if(e.key&&keysDown.delete(e.key.toLowerCase())) updKeyJoy(); });
 window.addEventListener('blur',()=>{ keysDown.clear(); updKeyJoy(); });
 /* ---------- joystick (phones) and WASD (computers) ---------- */
-const keysDown=new Set(); let joyV=null, joyHold=0, joySendT=0, joyPtr=null, keyJoy=false;
+const keysDown=new Set(); let joyV=null, joyHold=0, joySendT=0, joyPtr=null, keyJoy=false, joyDir='0,0';
 function updKeyJoy(){ const x=(keysDown.has('d')?1:0)-(keysDown.has('a')?1:0), y=(keysDown.has('s')?1:0)-(keysDown.has('w')?1:0);
-  if(x||y){ const l=Math.hypot(x,y); joyV={x:x/l,y:y/l}; keyJoy=true; } else if(keyJoy){ keyJoy=false; joyV=null; send({t:'stop'}); } }
-{ const J=$('#joy'),K=$('#joyK');
-  const upd=e=>{ const r=J.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),l=Math.hypot(dx,dy),m=Math.min(l,46);
-    K.style.transform=`translate(${l?dx/l*m:0}px,${l?dy/l*m:0}px)`; joyV=l<10?null:{x:dx/l,y:dy/l}; };
-  J.addEventListener('pointerdown',e=>{ audioOn(); e.preventDefault(); joyPtr=e.pointerId; J.setPointerCapture(e.pointerId); upd(e); joySendT=0; });
-  J.addEventListener('pointermove',e=>{ if(e.pointerId===joyPtr) upd(e); });
-  const end=e=>{ if(e.pointerId!==joyPtr) return; joyPtr=null; joyV=null; K.style.transform=''; send({t:'stop'}); };
-  J.addEventListener('pointerup',end); J.addEventListener('pointercancel',end); }
+  if(x||y){ const l=Math.hypot(x,y); joyV={x:x/l,y:y/l}; keyJoy=true; } else if(keyJoy){ keyJoy=false; joyV=null; } }
+{ // floating joystick: touch anywhere in the lower-left of the screen
+  const J=$('#joy'),K=$('#joyK'),Z=$('#joyZone'); let cx=0,cy=0;
+  const upd=e=>{ const dx=e.clientX-cx,dy=e.clientY-cy,l=Math.hypot(dx,dy),m=Math.min(l,48);
+    K.style.transform=`translate(${l?dx/l*m:0}px,${l?dy/l*m:0}px)`; joyV=l<12?null:{x:dx/l,y:dy/l}; };
+  Z.addEventListener('pointerdown',e=>{ audioOn(); e.preventDefault(); joyPtr=e.pointerId; Z.setPointerCapture(e.pointerId);
+    const r=$('#stage').getBoundingClientRect(); cx=e.clientX; cy=e.clientY; J.style.left=(cx-r.left-64)+'px'; J.style.top=(cy-r.top-64)+'px'; J.style.bottom='auto'; J.classList.add('act'); upd(e); joySendT=0; });
+  Z.addEventListener('pointermove',e=>{ if(e.pointerId===joyPtr) upd(e); });
+  const end=e=>{ if(e.pointerId!==joyPtr) return; joyPtr=null; joyV=null; K.style.transform=''; J.classList.remove('act'); J.style.left=''; J.style.top=''; J.style.bottom=''; };
+  Z.addEventListener('pointerup',end); Z.addEventListener('pointercancel',end); }
 const JDIRS=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
-function joyThink(dt){ joyHold-=dt; if(!joyV||!P||P.dead||!cur) return; joyHold=1.2; joySendT-=dt; if(joySendT>0) return; joySendT=.12;
-  // screen direction -> isometric grid direction
-  const gx=joyV.x/HW+joyV.y/HH, gy=joyV.y/HH-joyV.x/HW, oct=Math.round(Math.atan2(gy,gx)/(Math.PI/4));
-  for(const off of [0,1,-1]){ const [dx,dy]=JDIRS[((oct+off)%8+8)%8];
-    for(let n=3;n>=1;n--){ const x=P.x+dx*n,y=P.y+dy*n; if(x<0||y<0||x>=cur.W||y>=cur.H||cur.blk[y*cur.W+x]) continue;
-      if(myTargetId){ myTargetId=null; } pendingAct=null; marker=null; send({t:'move',x,y}); return; } } }
+function joyThink(dt){ joyHold-=dt; joySendT-=dt; if(!P||P.dead||!cur){ return; }
+  let d='0,0';
+  if(joyV){ joyHold=1.2; // screen direction -> isometric grid direction (8-way)
+    const gx=joyV.x/HW+joyV.y/HH, gy=joyV.y/HH-joyV.x/HW, oct=((Math.round(Math.atan2(gy,gx)/(Math.PI/4))%8)+8)%8; d=JDIRS[oct].join(',');
+    if(myTargetId) myTargetId=null; pendingAct=null; marker=null; }
+  if(d!==joyDir||(d!=='0,0'&&joySendT<=0)){ const [dx,dy]=d.split(',').map(Number); send({t:'dir',dx,dy}); joyDir=d; joySendT=.5; } }
 function checkPending(){ if(!pendingAct||!P) return; const a=pendingAct, near=a.big?Math.max(Math.abs(P.x-a.x-.5),Math.abs(P.y-a.y-.5))<=1.6:cheb(P,a)<=1;
   if(near&&Math.abs(P.rx-P.x)<.1&&Math.abs(P.ry-P.y)<.1){ pendingAct=null; if(a.act==='heal') send({t:'heal'}); else openPanel(a.act); } }
 function usePot(){ if(!ME) return; if(ME.inv.pot) send({t:'use',k:'pot'}); else if(ME.inv.big) send({t:'use',k:'big'}); else addLog('紅色藥水用完了，回村找莉娜買。'); }

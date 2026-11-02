@@ -156,14 +156,22 @@ export class World {
       else if(!P.path.length || (P.repath=(P.repath||0)-dt)<=0){ P.repath=.4; P.path=(melee?findPath(inst.m,P.x,P.y,t.x,t.y,'adj',0,(x,y)=>this.occupied(inst,x,y)):findPath(inst.m,P.x,P.y,t.x,t.y,'range',CLS[c.cls].range,(x,y)=>this.occupied(inst,x,y)))||[]; }
     }
     // movement
+    if(P.jdir&&Date.now()-P.dirT>1500) P.jdir=null; // joystick went quiet
+    if(P.jdir&&!P.path.length){ const st=this.dirStep(P); if(st) P.path=[st]; }
     if(P.path.length){ P.moveAcc+=dt;
-      while(P.path.length){ const [nx,ny]=P.path[0],diag=nx!==P.x&&ny!==P.y,need=diag?.2:.15; if(P.moveAcc<need) break;
+      while(P.path.length){ const [nx,ny]=P.path[0],diag=nx!==P.x&&ny!==P.y,need=diag?.17:.15; if(P.moveAcc<need) break;
         if(inst.m.blk[ny*inst.m.W+nx]||this.occupied(inst,nx,ny)||Math.max(Math.abs(nx-P.x),Math.abs(ny-P.y))!==1){ P.path=[]; break; }
         P.moveAcc-=need; P.path.shift(); this.face(P,nx-P.x,ny-P.y); P.x=nx; P.y=ny; this.pickAt(P);
-        const pt=inst.m.portals.find(o=>o.x===P.x&&o.y===P.y); if(pt){ this.enterMap(P,pt.to,null,inst.id); return; } }
+        const pt=inst.m.portals.find(o=>o.x===P.x&&o.y===P.y); if(pt){ P.jdir=null; this.enterMap(P,pt.to,null,inst.id); return; }
+        if(!P.path.length&&P.jdir){ const st=this.dirStep(P); if(st) P.path=[st]; } }
       if(!P.path.length) P.moveAcc=0;
     } else P.moveAcc=0;
   }
+  // joystick: one step in the held direction, sliding along walls
+  dirStep(P){ const M=P.inst.m,[dx,dy]=P.jdir,OCT=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]],i=OCT.findIndex(o=>o[0]===dx&&o[1]===dy); if(i<0) return null;
+    const free=(x,y)=>x>=0&&y>=0&&x<M.W&&y<M.H&&!M.blk[y*M.W+x]&&!this.occupied(P.inst,x,y);
+    for(const o of [0,1,-1]){ const [ax,ay]=OCT[(i+o+8)%8],nx=P.x+ax,ny=P.y+ay; if(!free(nx,ny)) continue; if(ax&&ay&&(!free(P.x+ax,P.y)||!free(P.x,P.y+ay))) continue; return [nx,ny]; }
+    return null; }
   face(e,dx,dy){ const v=dx-dy; if(v) e.dir=v>0?1:-1; const sx=dx-dy,sy=(dx+dy)*.5; if(sx||sy) e.face=(Math.round(Math.atan2(sy,sx)/(Math.PI/4))+8)%8; }
   resolveTarget(P){ if(!P.target) return null; const inst=P.inst;
     if(P.target[0]==='m'){ const m=inst.mobs.get(P.target); return m||null; }
@@ -448,13 +456,16 @@ export class World {
     if(++P.msgCount>40) return; // flood guard
     const c=P.c, inst=P.inst, town=inst.id==='village';
     switch(msg.t){
-      case 'move': { if(P.dead>0) return; const x=msg.x|0,y=msg.y|0; P.target=null; if(x<0||y<0||x>=inst.m.W||y>=inst.m.H) return;
+      case 'move': { if(P.dead>0) return; const x=msg.x|0,y=msg.y|0; P.target=null; P.jdir=null; if(x<0||y<0||x>=inst.m.W||y>=inst.m.H) return;
         const solid=inst.m.blk[y*inst.m.W+x]; P.path=findPath(inst.m,P.x,P.y,x,y,solid?'adj':'exact',0,(a,b)=>this.occupied(inst,a,b))||[]; P.moveAcc=Math.min(P.moveAcc,.15); return; }
       case 'attack': { if(P.dead>0) return; const id=String(msg.id||'');
         if(id[0]==='p'){ const T=this.players.get(id); if(!T||T.inst!==inst) return; if(!this.canPK(P,T)) return; }
         else if(!inst.mobs.has(id)) return;
         P.target=id; P.repath=0; return; }
-      case 'stop': P.target=null; P.path=[]; return;
+      case 'stop': P.target=null; P.path=[]; P.jdir=null; return;
+      case 'dir': { if(P.dead>0) return; const dx=Math.sign(msg.dx|0),dy=Math.sign(msg.dy|0);
+        if(!dx&&!dy){ P.jdir=null; if(P.path.length>1) P.path=P.path.slice(0,1); return; }
+        P.jdir=[dx,dy]; P.dirT=Date.now(); P.target=null; if(P.path.length>1) P.path=P.path.slice(0,1); return; }
       case 'skill': return this.useSkill(P,msg.i);
       case 'pick': { const L=inst.loot.get(String(msg.id||'')); if(!L) return; if(cheb(P,L)<=1) return this.pickUp(P,L,false);
         P.target=null; P.path=findPath(inst.m,P.x,P.y,L.x,L.y,'exact',0,(x,y)=>this.occupied(inst,x,y))||[]; return; }

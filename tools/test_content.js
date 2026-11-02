@@ -89,5 +89,9 @@ for(const [map,k] of [['forest','treant'],['waste','colossus'],['cave','firelord
   W.handle(S,{t:'autoequip'}); ok(S.c.eq.w.t===3&&S.c.eq.g&&S.c.eq.g.t===4,'auto-equip picks better weapon and gloves');
   const g0=S.c.gold; W.handle(S,{t:'sellall',q:0}); ok(S.c.gold>g0&&S.c.bag.every(it=>it.lock||(it.q|0)>0),'sell-all sells only normal unlocked items');
   S.c.bag.push({s:'b',t:1,en:0}); W.handle(S,{t:'lock',i:S.c.bag.length-1}); W.handle(S,{t:'sellall',q:2}); ok(S.c.bag.length===1&&S.c.bag[0].lock,'locked item survives sell-all'); }
+// joystick direction movement
+{ const J=await mk('搖桿','knight',5); W.enterMap(J,'village',{x:15,y:12}); const x0=J.x,y0=J.y;
+  W.handle(J,{t:'dir',dx:1,dy:0}); for(let i=0;i<10;i++){ J.dirT=Date.now(); W.tick(); } ok(J.x>x0+3&&J.y===y0,`joystick walks continuously (${x0}->${J.x} in 1s)`);
+  W.handle(J,{t:'dir',dx:0,dy:0}); const x1=J.x; tick(10); ok(J.x<=x1+1,'joystick release stops'); }
 ok(SKILLS.knight.length===3&&QUESTS.length>=10,'data tables present');
 console.log('done'); process.exit();
