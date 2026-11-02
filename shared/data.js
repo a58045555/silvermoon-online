@@ -127,10 +127,19 @@ function buildWild(id){ const m=newMap(id),d=m.def,W=m.W,H=m.H,R=rng(d.seed),idx
   const seen=new Uint8Array(W*H),q=[idx(entry.x,entry.y)];seen[q[0]]=1;
   while(q.length){const c=q.pop(),cx=c%W,cy=c/W|0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const k=idx(cx+dx,cy+dy);if(!seen[k]&&!m.blk[k]){seen[k]=1;q.push(k);}}}
   for(let k=0;k<W*H;k++){if(!m.blk[k]&&!seen[k])put(m,id==='forest'?'dtree':id==='waste'?'srock':'wall',k%W,k/W|0,0);}
+  if(id==='forest'){ // the village's south wall and gatehouse, seen from outside
+    const wy=1,x0=1,x1=14,inZone=(x,y)=>x>=0&&x<=x1+1&&y>=0&&y<=5;
+    m.objs=m.objs.filter(o=>{ let hit=false; for(let j=0;j<o.h;j++)for(let i=0;i<o.w;i++)if(inZone(o.x+i,o.y+j))hit=true; if(hit)for(let j=0;j<o.h;j++)for(let i=0;i<o.w;i++)m.blk[idx(o.x+i,o.y+j)]=0; return !hit; });
+    for(let y=0;y<=5;y++)for(let x=0;x<=x1+1;x++){ const k=idx(x,y); if(m.g[k]==='w'){m.g[k]=d.base||'g';} m.blk[k]=0; }
+    for(let x=0;x<=x1+1;x++){ m.blk[idx(x,0)]=1; if(x<3||x>4) m.blk[idx(x,wy)]=1; }
+    for(let y=wy;y<=5;y++){ m.g[idx(3,y)]=d.trail; m.g[idx(4,y)]=d.trail; }
+    m.wall={y:wy,x0,x1,g0:2,g1:5};
+    m.portals.push({x:3,y:wy,to:d.prev,label:'往'+MAPDEF[d.prev].name,gate:1},{x:4,y:wy,to:d.prev,label:'',gate:1});
+  } else
   m.portals.push({x:entry.x,y:entry.y,to:d.prev,label:'往'+MAPDEF[d.prev].name});
   if(d.next)m.portals.push({x:exit.x,y:exit.y,to:d.next,label:'往'+MAPDEF[d.next].name});
   m.entry=entry;m.exit=exit;m.boss=boss;m.spawn={x:4,y:4};
-  for(const p of m.portals)m.lights.push({x:p.x+.5,y:p.y+.5,r:2.6,c:'190,140,255'});
+  for(const p of m.portals)if(!p.gate)m.lights.push({x:p.x+.5,y:p.y+.5,r:2.6,c:'190,140,255'});
   if(id==='cave')for(let k=0;k<W*H;k++)if(m.g[k]==='l'&&R()<.25)m.lights.push({x:k%W+.5,y:(k/W|0)+.5,r:2.4,c:'255,120,40'});
   return finish(m); }
 function finish(m){ m.open=[]; for(let k=0;k<m.W*m.H;k++)if(!m.blk[k])m.open.push(k); return m; }
