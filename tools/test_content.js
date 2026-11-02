@@ -109,5 +109,13 @@ for(const [map,k] of [['forest','treant'],['waste','colossus'],['cave','firelord
   const I=W.maps[b.map]; W.enterMap(B,b.map,null,'village'); for(let i=0;i<b.need;i++){ const m=W.spawnMob(I,b.k,2,2); m.dmg.set(B.id,1); W.killMob(I,m); }
   ok(b.p>=b.need,'bounty progress counts kills'); W.enterMap(B,'village',{x:15,y:14}); const g=B.c.gold; W.handle(B,{t:'bclaim',i:0}); ok(B.c.gold>g&&B.c.bounty.done===1,'bounty reward claimed');
   B.c.lv=10; W.me(B); W.tick(); ok(B.c.ach.lv10&&B.c.title==='lv10','achievement unlocks a title'); }
+// high-level maps
+{ ok(W.maps.cave.m.portals.some(p=>p.to==='snow')&&W.maps.snow.m.portals.some(p=>p.to==='tower')&&W.maps.tower.m.portals.some(p=>p.to==='snow'),'cave -> snow -> tower are linked');
+  const H=await mk('高等','knight',45); W.enterMap(H,'tower',null,'snow'); const TW=W.maps.tower; let top=0;
+  for(let i=0;i<60;i++){ const b=W.spawnMob(TW,'sage',8,8); b.dmg.set(H.id,1); W.killMob(TW,b); } for(const L of TW.loot.values()) if(L.it&&L.it.t===5) top++;
+  ok(top>0,`the sage drops tier-6 moon gear (${top})`);
+  const SN=W.maps.snow; W.enterMap(H,'snow',null,'cave'); const fw=W.spawnMob(SN,'frostwitch',H.x+2,H.y); fw.hp=fw.maxhp*.5; fw.mechT=0; fw.slamT=99;
+  const n0=SN.mobs.size; W.bossAI(SN,fw,H,.1); ok(SN.mobs.size>n0,'frost witch summons frost wolves'); ok(SN.tg.some(g=>g.kind==='ice'),'frost witch casts ice lances');
+  const sg=W.spawnMob(TW,'sage',8,8); W.enterMap(H,'tower',{x:9,y:9}); sg.mechT=0; sg.slamT=99; W.bossAI(TW,sg,H,.1); ok(TW.tg.filter(g=>g.kind==='moon').length>=8,'sage casts a moonfall ring'); }
 ok(SKILLS.knight.length===3&&QUESTS.length>=10,'data tables present');
 console.log('done'); process.exit();
