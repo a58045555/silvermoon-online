@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no">
 <title>銀月大陸 Online</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +15,8 @@
   --pix:"DotGothic16","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
   color-scheme:dark;
 }
-html{height:100%;box-sizing:border-box}
+html{height:100%;box-sizing:border-box;touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button,input,select{touch-action:manipulation}
 [hidden]{display:none!important}
 *,*::before,*::after{box-sizing:border-box}
 body{height:100%;margin:0;background:var(--bg);color:var(--parch);font-family:var(--pix);overflow:hidden;
@@ -114,7 +115,7 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
 #log .l-log{color:var(--dim)}#log .l-sys{color:#e8c46a}#log .l-all{color:#ece2c8}#log .l-map{color:#cfd8c8}#log .l-party{color:#8fd8ff}#log .l-clan{color:#9fe09f}#log .l-w{color:#e0a0ff}
 #log b{font-weight:400}
 #fChat{display:flex;gap:4px}
-#fChat select,#fChat input{font:inherit;font-size:14px;background:#0f130f;color:var(--parch);border:1px solid var(--edge);padding:6px 6px;min-width:0}
+#fChat select,#fChat input{font:inherit;font-size:16px;background:#0f130f;color:var(--parch);border:1px solid var(--edge);padding:6px 6px;min-width:0}
 #fChat input{flex:1}
 #fChat button{flex:none;padding:6px 10px}
 .acts{grid-template-columns:repeat(6,1fr)}
@@ -140,7 +141,7 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
 .cinfo .gsel{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 .cinfo .gsel .btn{padding:7px 10px;font-size:12px}
 .cinfo form .btn[type=submit]{width:100%;margin-top:8px}
-.inl{display:flex;gap:6px;margin-top:8px}.inl input{font-size:14px;padding:7px 8px}.inl .btn{flex:none;padding:7px 12px;font-size:12px}
+.inl{display:flex;gap:6px;margin-top:8px}.inl input{font-size:16px;padding:7px 8px}.inl .btn{flex:none;padding:7px 12px;font-size:12px}
 .num{font-variant-numeric:tabular-nums}
 #status{position:fixed;left:50%;top:max(10px,env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:40;background:#2a1d10;border:1px solid var(--gold);color:var(--parch);font-size:13px;padding:6px 12px}
 #toast{position:fixed;left:50%;bottom:max(90px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:45;background:#3a1612;border:1px solid var(--danger);color:#ffd4cc;font-size:13px;padding:8px 14px;max-width:90vw}

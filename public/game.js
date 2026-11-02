@@ -739,6 +739,10 @@ function updateFx(dt){
 function resize(){const r=$('#stage').getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1);VW=Math.max(100,r.width-4);VH=Math.max(100,r.height-4);
   cv.width=Math.round(VW*d);cv.height=Math.round(VH*d);cv.style.width=VW+'px';cv.style.height=VH+'px';ctx.setTransform(d,0,0,d,0,0);ctx.imageSmoothingEnabled=false;lightCv.width=Math.ceil(VW/4);lightCv.height=Math.ceil(VH/4);}
 window.addEventListener('resize',resize);
+// keep the canvas matched to its box whenever the layout changes; block browser zoom gestures on phones
+try{ let rT=0; new ResizeObserver(()=>{ cancelAnimationFrame(rT); rT=requestAnimationFrame(resize); }).observe($('#stage')); }catch{}
+for(const ev of ['gesturestart','gesturechange']) document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
+document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
 cv.addEventListener('pointerdown',e=>{ audioOn(); if(!P||!cur||P.dead) return;
   const r=cv.getBoundingClientRect(),wx=e.clientX-r.left+cam.x,wy=e.clientY-r.top+cam.y,u=wx-OX;
   const tx=Math.floor((u/HW+wy/HH)/2),ty=Math.floor((wy/HH-u/HW)/2);
