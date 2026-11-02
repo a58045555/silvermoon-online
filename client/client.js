@@ -333,20 +333,29 @@ function updateFx(dt){
 }
 
 /* ---------- input ---------- */
-let ZOOM=1; try{ ZOOM=+localStorage.getItem('sm_zoom')||1; }catch{}
+let ZOOM=matchMedia('(pointer:coarse)').matches?.75:1; try{ const z=+localStorage.getItem('sm_zoom2'); if(z) ZOOM=z; }catch{}
 let hideTrack=false; try{ hideTrack=localStorage.getItem('sm_track')==='0'; }catch{}
 let hideOthers=false; try{ hideOthers=localStorage.getItem('sm_hide')==='1'; }catch{}
 const isTouch=matchMedia('(pointer:coarse)').matches||('ontouchstart' in window&&navigator.maxTouchPoints>0); if(isTouch) document.body.classList.add('touch');
 function resize(){const r=$('#stage').getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1),cw=Math.max(100,r.width-4),ch=Math.max(100,r.height-4);VW=cw/ZOOM;VH=ch/ZOOM;
   cv.width=Math.round(cw*d);cv.height=Math.round(ch*d);cv.style.width=cw+'px';cv.style.height=ch+'px';ctx.setTransform(d*ZOOM,0,0,d*ZOOM,0,0);ctx.imageSmoothingEnabled=false;lightCv.width=Math.ceil(VW/4);lightCv.height=Math.ceil(VH/4);
   $('#bZoom').textContent=Math.round(ZOOM*100)+'%';}
-$('#bZoom').onclick=()=>{ ZOOM=ZOOM>=1.5?1:ZOOM>=1.25?1.5:1.25; try{localStorage.setItem('sm_zoom',ZOOM);}catch{} resize(); };
+const ZSTEPS=[.6,.75,1,1.25,1.5];
+function setZoom(z){ ZOOM=Math.max(.5,Math.min(1.6,Math.round(z*100)/100)); try{localStorage.setItem('sm_zoom2',ZOOM);}catch{} resize(); }
+$('#bZoom').onclick=()=>{ const i=ZSTEPS.findIndex(v=>v>ZOOM+.01); setZoom(i<0?ZSTEPS[0]:ZSTEPS[i]); };
+// two-finger pinch on phones, mouse wheel on computers
+{ const pts=new Map(); let pinch0=0,z0=1;
+  cv.addEventListener('pointerdown',e=>{ pts.set(e.pointerId,[e.clientX,e.clientY]); if(pts.size===2){ const [a,b]=[...pts.values()]; pinch0=Math.hypot(a[0]-b[0],a[1]-b[1]); z0=ZOOM; } },true);
+  cv.addEventListener('pointermove',e=>{ if(!pts.has(e.pointerId)) return; pts.set(e.pointerId,[e.clientX,e.clientY]); if(pts.size===2&&pinch0>0){ const [a,b]=[...pts.values()]; setZoom(z0*Math.hypot(a[0]-b[0],a[1]-b[1])/pinch0); } });
+  const up=e=>{ pts.delete(e.pointerId); if(pts.size<2) pinch0=0; };
+  cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+  cv.addEventListener('wheel',e=>{ e.preventDefault(); setZoom(ZOOM*(e.deltaY>0?.9:1.1)); },{passive:false}); }
 window.addEventListener('resize',resize);
 // keep the canvas matched to its box whenever the layout changes; block browser zoom gestures on phones
 try{ let rT=0; new ResizeObserver(()=>{ cancelAnimationFrame(rT); rT=requestAnimationFrame(resize); }).observe($('#stage')); }catch{}
 for(const ev of ['gesturestart','gesturechange']) document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
 document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
-cv.addEventListener('pointerdown',e=>{ audioOn(); if(!P||!cur||P.dead) return;
+cv.addEventListener('pointerdown',e=>{ audioOn(); if(!e.isPrimary||!P||!cur||P.dead) return;
   const r=cv.getBoundingClientRect(),wx=(e.clientX-r.left)/ZOOM+cam.x,wy=(e.clientY-r.top)/ZOOM+cam.y,u=wx-OX;
   const tx=Math.floor((u/HW+wy/HH)/2),ty=Math.floor((wy/HH-u/HW)/2);
   const sx0=(e.clientX-r.left)/ZOOM,sy0=(e.clientY-r.top)/ZOOM;

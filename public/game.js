@@ -436,11 +436,11 @@ function draw(){const m=cur;OX=m.H*HW;const WWp=(m.W+m.H)*HW,WHp=(m.W+m.H)*HH;
       ctx.beginPath();ctx.arc(-6,0,p.big?24:17,-1.3+k*.6,1.3+k*.6);ctx.stroke();ctx.restore();ctx.globalAlpha=1;continue;}
     if(p.type=='ring'){ctx.strokeStyle=`rgba(${p.c},${1-k})`;ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(X,Y,p.r*k,p.r*k*.5,0,0,7);ctx.stroke();continue;}
     ctx.globalAlpha=p.type=='leaf'?Math.min(1,(1-k)*2):1-k*.6;ctx.fillStyle=p.c;ctx.fillRect(Math.round(X),Math.round(Y),p.s,p.s);ctx.globalAlpha=1;}
-  const di=dayInfo();NIGHT=m.id=='cave'?0:(1-di.day)*.62;const dark=Math.min(.9,m.dark+NIGHT);
+  const di=dayInfo();NIGHT=m.id=='cave'?0:(1-di.day)*.48;const dark=Math.min(.9,m.dark+NIGHT);
   if(dark>0.02){const L=lctx,sc=.25;L.globalCompositeOperation='source-over';L.clearRect(0,0,lightCv.width,lightCv.height);
     L.fillStyle=m.id=='waste'&&NIGHT<.2?`rgba(50,26,0,${dark})`:`rgba(4,6,16,${dark})`;L.fillRect(0,0,lightCv.width,lightCv.height);L.globalCompositeOperation='destination-out';
     const hole=(wx,wy,r,a)=>{const X=(wx-cam.x)*sc,Y=(wy-cam.y)*sc,R=r*40*sc;if(X<-R||Y<-R||X>lightCv.width+R||Y>lightCv.height+R)return;const g=L.createRadialGradient(X,Y,0,X,Y,R);g.addColorStop(0,`rgba(0,0,0,${a})`);g.addColorStop(1,'rgba(0,0,0,0)');L.fillStyle=g;L.fillRect(X-R,Y-R,R*2,R*2);};
-    hole(fx(P),fy(P)-20,m.id=='cave'?5+Math.sin(now*9)*.15:6,1);for(const l of m.lights)if(!l.night||NIGHT>.12)hole(PX(l.x,l.y),PY(l.x,l.y)-(l.h||0),l.r,.9);
+    hole(fx(P),fy(P)-20,m.id=='cave'?8+Math.sin(now*9)*.2:10,1);for(const l of m.lights)if(!l.night||NIGHT>.12)hole(PX(l.x,l.y),PY(l.x,l.y)-(l.h||0),l.r,.9);
     for(const p of projs)if(p.kind!='arrow')hole(p.x,p.y,p.kind=='fire'?3:1.8,.9);for(const L of lootList())if(L.q>=1)hole(PX(L.x+.5,L.y+.5),PY(L.x+.5,L.y+.5)-30,L.q>=3?3.5:2,.8);for(const g of tgs)hole(PX(g.x+.5,g.y+.5),PY(g.x+.5,g.y+.5),g.r*1.3,.5);for(const p of parts)if(p.type=='ring')hole(p.x,p.y,2.5,.6);
     ctx.imageSmoothingEnabled=true;ctx.drawImage(lightCv,0,0,VW,VH);ctx.imageSmoothingEnabled=false;
     if(m.id=='cave'||NIGHT>.12){ctx.globalCompositeOperation='lighter';for(const l of m.lights){if(l.night&&NIGHT<=.12)continue;const X=PX(l.x,l.y)-cam.x,Y=PY(l.x,l.y)-cam.y-(l.h||0);if(X<-90||Y<-90||X>VW+90||Y>VH+90)continue;const rr=l.r*34,g=ctx.createRadialGradient(X,Y,0,X,Y,rr);g.addColorStop(0,`rgba(${l.c},${m.id=='cave'?.2:.16})`);g.addColorStop(1,`rgba(${l.c},0)`);ctx.fillStyle=g;ctx.fillRect(X-rr,Y-rr,rr*2,rr*2);}ctx.globalCompositeOperation='source-over';}}
@@ -798,20 +798,29 @@ function updateFx(dt){
 }
 
 /* ---------- input ---------- */
-let ZOOM=1; try{ ZOOM=+localStorage.getItem('sm_zoom')||1; }catch{}
+let ZOOM=matchMedia('(pointer:coarse)').matches?.75:1; try{ const z=+localStorage.getItem('sm_zoom2'); if(z) ZOOM=z; }catch{}
 let hideTrack=false; try{ hideTrack=localStorage.getItem('sm_track')==='0'; }catch{}
 let hideOthers=false; try{ hideOthers=localStorage.getItem('sm_hide')==='1'; }catch{}
 const isTouch=matchMedia('(pointer:coarse)').matches||('ontouchstart' in window&&navigator.maxTouchPoints>0); if(isTouch) document.body.classList.add('touch');
 function resize(){const r=$('#stage').getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1),cw=Math.max(100,r.width-4),ch=Math.max(100,r.height-4);VW=cw/ZOOM;VH=ch/ZOOM;
   cv.width=Math.round(cw*d);cv.height=Math.round(ch*d);cv.style.width=cw+'px';cv.style.height=ch+'px';ctx.setTransform(d*ZOOM,0,0,d*ZOOM,0,0);ctx.imageSmoothingEnabled=false;lightCv.width=Math.ceil(VW/4);lightCv.height=Math.ceil(VH/4);
   $('#bZoom').textContent=Math.round(ZOOM*100)+'%';}
-$('#bZoom').onclick=()=>{ ZOOM=ZOOM>=1.5?1:ZOOM>=1.25?1.5:1.25; try{localStorage.setItem('sm_zoom',ZOOM);}catch{} resize(); };
+const ZSTEPS=[.6,.75,1,1.25,1.5];
+function setZoom(z){ ZOOM=Math.max(.5,Math.min(1.6,Math.round(z*100)/100)); try{localStorage.setItem('sm_zoom2',ZOOM);}catch{} resize(); }
+$('#bZoom').onclick=()=>{ const i=ZSTEPS.findIndex(v=>v>ZOOM+.01); setZoom(i<0?ZSTEPS[0]:ZSTEPS[i]); };
+// two-finger pinch on phones, mouse wheel on computers
+{ const pts=new Map(); let pinch0=0,z0=1;
+  cv.addEventListener('pointerdown',e=>{ pts.set(e.pointerId,[e.clientX,e.clientY]); if(pts.size===2){ const [a,b]=[...pts.values()]; pinch0=Math.hypot(a[0]-b[0],a[1]-b[1]); z0=ZOOM; } },true);
+  cv.addEventListener('pointermove',e=>{ if(!pts.has(e.pointerId)) return; pts.set(e.pointerId,[e.clientX,e.clientY]); if(pts.size===2&&pinch0>0){ const [a,b]=[...pts.values()]; setZoom(z0*Math.hypot(a[0]-b[0],a[1]-b[1])/pinch0); } });
+  const up=e=>{ pts.delete(e.pointerId); if(pts.size<2) pinch0=0; };
+  cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+  cv.addEventListener('wheel',e=>{ e.preventDefault(); setZoom(ZOOM*(e.deltaY>0?.9:1.1)); },{passive:false}); }
 window.addEventListener('resize',resize);
 // keep the canvas matched to its box whenever the layout changes; block browser zoom gestures on phones
 try{ let rT=0; new ResizeObserver(()=>{ cancelAnimationFrame(rT); rT=requestAnimationFrame(resize); }).observe($('#stage')); }catch{}
 for(const ev of ['gesturestart','gesturechange']) document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
 document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
-cv.addEventListener('pointerdown',e=>{ audioOn(); if(!P||!cur||P.dead) return;
+cv.addEventListener('pointerdown',e=>{ audioOn(); if(!e.isPrimary||!P||!cur||P.dead) return;
   const r=cv.getBoundingClientRect(),wx=(e.clientX-r.left)/ZOOM+cam.x,wy=(e.clientY-r.top)/ZOOM+cam.y,u=wx-OX;
   const tx=Math.floor((u/HW+wy/HH)/2),ty=Math.floor((wy/HH-u/HW)/2);
   const sx0=(e.clientX-r.left)/ZOOM,sy0=(e.clientY-r.top)/ZOOM;
