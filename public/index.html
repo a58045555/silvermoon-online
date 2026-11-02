@@ -37,7 +37,18 @@ body{height:100%;margin:0;background:var(--bg);color:var(--parch);font-family:va
 #stage{position:relative;flex:1;min-height:0;border:2px solid var(--edge);background:#060806;overflow:hidden}
 #cv{display:block;touch-action:none}
 
-.acts{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.acts{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.skbar{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.btn.sk{position:relative;overflow:hidden;border-color:#5a6e4a}
+.btn.sk .sn{position:relative;z-index:1}.btn.sk small{position:relative;z-index:1}
+.btn.sk .cdv{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(0,0,0,.62);pointer-events:none}
+.btn.sk.lock{opacity:.42;border-color:var(--edge)}
+.btn.sk.ready{border-color:#9fbf6a;box-shadow:inset 0 0 8px rgba(159,191,106,.25)}
+.leg{color:#ff9a3c;text-shadow:0 0 6px rgba(255,140,40,.6)}
+.story{white-space:pre-line;line-height:1.7;border-left:3px solid var(--gold);padding:4px 10px;margin:8px 0;color:#ece2c8}
+.qrow{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--edge)}
+.qrow.done{color:#7fe08a}
+.pbar{height:6px;background:#0a0d0b;border:1px solid var(--edge);margin-top:4px}.pbar>i{display:block;height:100%;background:var(--gold)}
 .btn{font:inherit;color:var(--parch);background:linear-gradient(#2b3028,#1b1f19);border:2px solid var(--edge);padding:9px 2px;font-size:13px;cursor:pointer;line-height:1.2}
 .btn small{display:block;font-size:10px;color:var(--dim);margin-top:2px}
 .btn:active{transform:translateY(1px);border-color:var(--gold)}
@@ -79,7 +90,7 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
 .slot.sel,.bcell.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
 .slot .lb{position:absolute;left:3px;top:2px;font-size:9px;color:var(--dim)}
 .slot .en,.bcell .en{position:absolute;right:3px;bottom:2px;font-size:10px;color:#ffe7a3;text-shadow:0 1px 0 #000}
-.bcell.q1{border-color:#4a7aa8}.bcell.q2{border-color:#c49a3a}
+.bcell.q1{border-color:#4a7aa8}.bcell.q2{border-color:#c49a3a}.bcell.q3{border-color:#ff9a3c;box-shadow:0 0 8px rgba(255,140,40,.7)}
 .bgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
 .ic{width:32px;height:32px;image-rendering:pixelated;background-repeat:no-repeat;transform:scale(1.15)}
 .ict{font-size:11px;color:var(--parch)}
@@ -106,7 +117,7 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
 #fChat select,#fChat input{font:inherit;font-size:14px;background:#0f130f;color:var(--parch);border:1px solid var(--edge);padding:6px 6px;min-width:0}
 #fChat input{flex:1}
 #fChat button{flex:none;padding:6px 10px}
-.acts{grid-template-columns:repeat(4,1fr)}
+.acts{grid-template-columns:repeat(6,1fr)}
 .acts .btn{padding:8px 2px}
 #online{font-size:10px;color:var(--dim);text-align:right}
 #screen{position:fixed;inset:0;z-index:30;background:radial-gradient(ellipse at 50% 20%,#1d2a1e 0%,var(--bg) 70%);overflow:auto;display:flex;justify-content:center;align-items:flex-start;
@@ -150,15 +161,19 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
   <div id="stage"><canvas id="cv"></canvas></div>
   <div id="log" aria-live="polite"></div>
   <form id="fChat"><select id="chatCh" aria-label="頻道"><option value="map">地圖</option><option value="all">全頻</option><option value="party">隊伍</option><option value="clan">血盟</option></select><input id="chatIn" maxlength="120" placeholder="說點什麼…（/名字 訊息 = 私訊）" autocomplete="off"><button class="btn">送出</button></form>
-  <div class="acts">
+  <div class="skbar">
+    <button class="btn sk" id="bS0"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
+    <button class="btn sk" id="bS1"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
+    <button class="btn sk" id="bS2"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
     <button class="btn" id="bPot">藥水<small id="cPot">×0</small></button>
-    <button class="btn" id="bSkill"><span id="skN">技能</span><small id="skM"></small></button>
+  </div>
+  <div class="acts">
     <button class="btn" id="bAuto">自動<small>狩獵</small></button>
-    <button class="btn" id="bRet">回村<small id="cRet">×0</small></button>
+    <button class="btn" id="bQuest">任務<small id="cQuest">主線</small></button>
     <button class="btn" id="bBag">角色<small>背包</small></button>
-    <button class="btn" id="bSocial">社交<small>隊伍・血盟</small></button>
+    <button class="btn" id="bRet">回村<small id="cRet">×0</small></button>
+    <button class="btn" id="bSocial">社交<small>隊伍</small></button>
     <button class="btn" id="bPk">PK<small>模式</small></button>
-    <button class="btn" id="bHelp" onclick="document.getElementById('chatIn').focus()">聊天<small>輸入</small></button>
   </div>
 </div>
 <div id="overlay" hidden><div class="panel"><header><h2 id="pTitle"></h2><button class="close" id="pClose">關閉</button></header><div id="pBody"></div></div></div>

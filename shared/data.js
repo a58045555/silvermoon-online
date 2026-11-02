@@ -179,7 +179,7 @@ export function enchRate(kind,en){ const safe=kind==='w'?6:4; if(en<safe)return 
 export const sellP = it=>Math.round([25,120,450,1300,3200][it.t|0]*(it.s==='w'?1.2:it.s==='a'?1:it.s==='r'||it.s==='n'?1.4:.7)*(1+(it.q|0)*.8)+(it.en|0)*(it.en|0)*40);
 export const shopPrice = (sl,t)=>Math.round([0,600,2400,7000,16000][t]*(sl==='w'?1:sl==='a'?.8:.45));
 export const SHOP_GEAR = [['w',1],['a',1],['h',1],['g',1],['b',1],['c',1],['s',1],['w',2],['a',2]];
-export function itemBaseName(it,cls){ if(!it)return'（無）'; if(it.s==='w')return(WN[cls]||WN.knight)[it.t]; if(it.s==='r')return(RINGS[it.t]||RINGS[0]).n; return ARM[it.s]?ARM[it.s].n[it.t]:'?'; }
+export function itemBaseName(it,cls){ if(!it)return'（無）'; if(it.leg)return it.s==='w'?(LEGEND_W[cls]||LEGEND_W.knight):it.leg; if(it.s==='w')return(WN[cls]||WN.knight)[it.t]; if(it.s==='r')return(RINGS[it.t]||RINGS[0]).n; return ARM[it.s]?ARM[it.s].n[it.t]:'?'; }
 export function itemName(it,cls){ if(!it)return'（無）'; return(it.en?'+'+it.en+' ':'')+itemBaseName(it,cls); }
 export function itemStat(it){ const b=itemBase(it),out=[]; for(const k of ['atk','def','hp','mp','str','dex','con','int','wis'])if(b[k])out.push(BONK[k]+' +'+b[k]); return out.join('、')||'無屬性'; }
 export function eqSlotFor(eq,it){ if(it.s==='r')return!eq.r1?'r1':!eq.r2?'r2':'r1'; return it.s; }
@@ -194,5 +194,67 @@ export function randomSlot(R=Math.random){ const r=R(); return r<.22?'w':r<.36?'
 export function newCharacter(cls,g,name){
   return { cls, g:g==='f'?'f':'m', name, lv:1, exp:0, gold:200, hp:0, mp:0, sp:{str:0,dex:0,con:0,int:0,wis:0}, pts:0,
     eq:{w:{s:'w',t:0,en:0},h:null,a:{s:'a',t:0,en:0},c:null,g:null,b:null,s:null,n:null,r1:null,r2:null},
-    bag:[], inv:{pot:6,big:0,blue:2,ret:2,ws:1,as:1}, map:'village', x:15, y:14, lawful:0, kills:0, pkKills:0, bossKills:0 }; }
+    bag:[], inv:{pot:6,big:0,blue:2,ret:2,ws:1,as:1}, map:'village', x:15, y:14, lawful:0, kills:0, pkKills:0, bossKills:0, mq:0, mqp:0, daily:null }; }
 export const NAME_RE = /^[\p{L}\p{N}_]{2,12}$/u;
+
+// ---------- skills (3 per class, unlocked at Lv.1 / 5 / 10) ----------
+export const SKILLS = {
+  knight:[ {id:'k1',n:'衝擊斬',lv:1,mp:8,cd:1.6,tgt:1,d:'重擊單一目標並暈眩 1.3 秒'},
+           {id:'k2',n:'旋風斬',lv:5,mp:14,cd:5,d:'砍擊身邊所有敵人'},
+           {id:'k3',n:'鐵壁',lv:10,mp:16,cd:20,d:'8 秒內受到的傷害減半'} ],
+  ranger:[ {id:'r1',n:'三連射',lv:1,mp:10,cd:1.8,tgt:1,d:'連射三箭'},
+           {id:'r2',n:'穿雲箭',lv:5,mp:16,cd:6,tgt:1,d:'威力 3.2 倍、必定爆擊的一箭'},
+           {id:'r3',n:'疾風步',lv:10,mp:18,cd:20,d:'8 秒內攻速 +60%、閃避 +15%'} ],
+  mage:[   {id:'m1',n:'火球術',lv:1,mp:12,cd:2,tgt:1,d:'炸傷目標和周圍的敵人'},
+           {id:'m2',n:'冰霜新星',lv:5,mp:18,cd:7,d:'冰凍身邊的敵人 2 秒並造成傷害'},
+           {id:'m3',n:'治癒術',lv:10,mp:20,cd:6,d:'回復自己和附近隊友的 HP'} ],
+  darkelf:[{id:'d1',n:'暗影突襲',lv:1,mp:9,cd:1.5,tgt:1,d:'連砍兩刀，第二刀必爆擊'},
+           {id:'d2',n:'毒刃',lv:5,mp:12,cd:5,tgt:1,d:'使目標中毒 6 秒，每秒受到傷害'},
+           {id:'d3',n:'影遁',lv:10,mp:16,cd:18,d:'6 秒內閃避 +40%，下一擊必定爆擊'} ]
+};
+
+// ---------- legendary weapons ----------
+export const LEGEND_W = { knight:'銀誓', ranger:'風語・星痕', mage:'月之塔殘杖', darkelf:'冥月雙刃' };
+export function makeLegend(kind){
+  if(kind==='n') return {s:'n',t:4,en:0,q:3,leg:'新月項鍊',bon:{hp:120,str:3,dex:3,con:3,int:3,wis:3}};
+  return {s:'w',t:4,en:0,q:3,leg:'w',bon:{atk:18,str:4,dex:4,con:2,int:4}};
+}
+
+// ---------- main quests (follow the story 新月之誓) ----------
+export const QUESTS = [
+  {n:'序章：月碎之夜', d:'找村南的守衛艾德說話', type:'talk', r:{exp:20,gold:100,pot:5},
+   story:'酒館裡的老故事說，很久以前天上有兩顆月亮。最近哭泣森林在夜裡傳出哭聲，守衛艾德想找冒險者幫忙。'},
+  {n:'第一章：晨霧村的旅人', d:'到哭泣森林打倒 10 隻苔蘚史萊姆。', type:'kill', k:['slime'], n:10, r:{exp:80,gold:200,ret:2},
+   story:'艾德：「史萊姆的黏液裡有月痕碎屑，有人在森林裡餵牠們。去看看。」'},
+  {n:'第一章：鐵匠的兵器', d:'回村找鐵匠巴爾克，衝一次裝備。', type:'enchant', n:1, r:{ws:1,as:1,gold:200},
+   story:'艾德：「碎屑我收下了。去找巴爾克，你的兵器撐不了多久。」'},
+  {n:'第二章：哭泣森林', d:'掃蕩森林裡的哥布林：打倒 15 隻。', type:'kill', k:['goblin'], n:15, r:{exp:300,gold:500,big:3},
+   story:'哥布林營地裡堆著一箱箱用灰布包好的月痕。有人拿食物跟牠們交換。'},
+  {n:'第二章：老根的哭聲', d:'打倒森林深處的腐木樹妖。', type:'kill', k:['treant'], n:1, r:{exp:800,gold:1500,ws:2},
+   story:'精靈遊俠希爾薇：「精靈守護千年的古樹被人埋進了月痕。從那天起，它每晚都在哭。」'},
+  {n:'第三章：骸骨荒原', d:'到骸骨荒原打倒 20 隻骷髏兵或木乃伊。', type:'kill', k:['skel','mummy'], n:20, r:{exp:1500,gold:1500},
+   story:'樹妖的碎片上刻著羊頭骷髏，那是灰燼教團的記號。車轍印一路往南，通往一片沒有草的沙地。'},
+  {n:'第三章：銀誓', d:'打倒荒原中央的白骨巨像。', type:'kill', k:['colossus'], n:1, r:{exp:4000,gold:4000,as:2},
+   story:'老學者諾恩：「教團在餵封印下的那個人。他叫卡爾薩，三百年前銀月騎士團的團長。」'},
+  {n:'第四章：地底的影子', d:'打倒 10 隻沙漠巨蟲，救出受傷的黑暗妖精。', type:'kill', k:['worm'], n:10, r:{exp:3000,gold:3000,big:5},
+   story:'艾德倒在巨像的碎骨旁，把劍交給你：「它不會讓你變強，只會提醒你為什麼要握劍。」'},
+  {n:'第五章：熔岩洞窟', d:'擊退灰燼教團：打倒 15 隻魔族祭司。', type:'kill', k:['cultist'], n:15, r:{exp:6000,gold:5000},
+   story:'黑暗妖精薇拉：「我們三年前就警告過你們。下一個滿月，封印就擋不住了。」'},
+  {n:'第六章：月心', d:'打倒熾焰領主卡爾薩。', type:'kill', k:['firelord'], n:1, r:{exp:15000,gold:10000,ws:3,as:3},
+   story:'卡爾薩：「我也握過那把劍。有了月心，你的劍永遠不會斷。拿去吧。」'},
+  {n:'終章：新月之下', d:'回村向守衛艾德報告', type:'talk', r:{gold:5000},
+   story:'夜空出現了一道細細的銀色彎月。北方雪山的天際，卻翻出了一絲紅光……（第二部「血月之預言」敬請期待）'}
+];
+// ---------- daily quests ----------
+export const DAILY_POOL = [
+  {k:'kill',  n:40, d:'打倒 40 隻怪物'},
+  {k:'kill',  n:80, d:'打倒 80 隻怪物'},
+  {k:'boss',  n:1,  d:'參與擊殺 1 隻 Boss'},
+  {k:'enchant',n:2, d:'在鐵匠鋪衝裝 2 次'},
+  {k:'pick',  n:8,  d:'撿起 8 件掉落物'},
+  {k:'party', n:30, d:'和隊友一起打倒 30 隻怪物'},
+  {k:'skill', n:30, d:'使用技能 30 次'}
+];
+export function dailyFor(day){ const R=rng([...day].reduce((a,c)=>a*31+c.charCodeAt(0),7)); const idx=[...DAILY_POOL.keys()];
+  const out=[]; while(out.length<3){ const i=idx.splice(Math.floor(R()*idx.length),1)[0]; out.push({...DAILY_POOL[i],p:0,done:false}); } return out; }
+export const RARN = ['','魔法','稀有','傳說'];

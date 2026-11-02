@@ -1,6 +1,6 @@
 // 銀月大陸 Online client — built by tools/build_client.py from client/header.js + client/legacy.js + client/client.js
 import { CLS, STATN, STATD, MT, MAPDEF, SHOP, INV_N, BAGMAX, SLOTS, SLOTN, NOSHIELD, BIG, SHOP_GEAR, PK_MIN_LV, CLAN_COST, CLAN_MIN_LV,
-  rng, buildMap, itemBase, itemBaseName, itemName, itemStat, eqSlotFor, enchRate, sellP, shopPrice, expNeed, cheb, dist } from '/shared/data.js';
+  SKILLS, QUESTS, LEGEND_W, RARN, rng, buildMap, itemBase, itemBaseName, itemName, itemStat, eqSlotFor, enchRate, sellP, shopPrice, expNeed, cheb, dist } from '/shared/data.js';
 
 const $ = s=>document.querySelector(s);
 const rnd=(a,b)=>a+Math.random()*(b-a), ri=(a,b)=>Math.floor(rnd(a,b+1)), pick=a=>a[Math.floor(Math.random()*a.length)];
