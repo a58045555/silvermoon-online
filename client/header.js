@@ -15,7 +15,8 @@ function mk(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;r
 let now=0, cur=null, P=null, ME=null, cam={x:0,y:0}, VW=0, VH=0;
 let floats=[], parts=[], projs=[], marker=null, banner={t:0,a:'',b:''}, shake=0, shakeMag=0, hurtFlash=0;
 const players=new Map();
-let ASSETS={}, MOBS={}, SHEETS={}, NPCIMG={}, ICONS=null;
+let ASSETS={}, MOBS={}, SHEETS={}, NPCIMG={}, ICONS=null, VFX={}, UI=null, DECOR=null, DECORIMG=null;
+const VFXI={}; let vfxs=[], hitStop=0;
 const AIMG={}, MOBI={}, NPCI={}, SHIMG={};
 function aImg(k){return AIMG[k]&&AIMG[k].naturalWidth?AIMG[k]:null;}
 function npcImg(k){const d=NPCIMG[k];if(!d)return null;if(!NPCI[k]){const im=new Image();im.src=d.src;NPCI[k]=im;}return NPCI[k].complete&&NPCI[k].naturalWidth?NPCI[k]:null;}

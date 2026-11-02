@@ -504,7 +504,7 @@ export class World {
   // ---------- chat ----------
   chat(P,msg){ const text=String(msg.msg||'').replace(/[\u0000-\u001f]/g,'').trim().slice(0,120); if(!text) return;
     if(process.env.DEV_CMDS==='1'&&text[0]==='!'){ const [cmd,arg,arg2]=text.slice(1).split(/\s+/),c=P.c;
-      if(cmd==='lv'){ c.lv=Math.max(1,Math.min(60,arg|0)); c.pts=0; this.me(P); }
+      if(cmd==='lv'){ c.lv=Math.max(1,Math.min(60,arg|0)); c.pts=0; c.hp=c.mp=99999; this.me(P); }
       if(cmd==='tp'&&MAPDEF[arg]){ const b=this.maps[arg].m.boss; this.enterMap(P,arg,arg2==='boss'&&b?{x:b.x+3,y:b.y+3}:null); }
       if(cmd==='drop'){ const q=arg|0; this.dropLoot(P.inst,P.x+1,P.y+1,q===3?{it:makeLegend('w')}:q?{it:Object.assign(makeItem('h',3),{q,bon:{str:2}})}:{k:'pot'},new Set([P.id]),P); }
       if(cmd==='eclipse'){ if(arg==='off') this.setEclipse(false); else this.setEclipse(true,Date.now()+(+arg||30)*60e3,true); }

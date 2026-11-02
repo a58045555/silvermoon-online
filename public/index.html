@@ -65,6 +65,20 @@ body:not(.touch) .acts{grid-template-columns:repeat(6,1fr)}
 .btn.sk .cdv{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(0,0,0,.62);pointer-events:none}
 .btn.sk.lock{opacity:.42;border-color:var(--edge)}
 .btn.sk.ready{border-color:#9fbf6a;box-shadow:inset 0 0 8px rgba(159,191,106,.25)}
+.uic{display:block;width:32px;height:32px;background-image:var(--uisheet);background-repeat:no-repeat;image-rendering:pixelated}
+.skpad .btn .uic{width:34px;height:34px;flex:none}
+.skpad .btn.sk .sn{display:none}
+#bAtk .uic{width:44px;height:44px}#bAtk span{font-size:12px;margin-top:-2px}
+.uic.mi{width:22px;height:22px;margin:0 auto 2px}
+.uic.gi{width:20px;height:20px;display:inline-block;vertical-align:middle;margin-right:2px}
+.hud{background:linear-gradient(#2a2a22,#15160f)!important;border-image:linear-gradient(#b89a58,#5a4a2a) 1!important;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),0 2px 6px rgba(0,0,0,.5)}
+.lv{text-shadow:0 0 6px rgba(232,196,106,.45)}
+.bar{border-radius:2px;box-shadow:inset 0 1px 2px rgba(0,0,0,.8)}
+.bar>i{box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+.acts .btn{background:linear-gradient(#30342a,#191c16);border-color:#4a4636;border-radius:4px}
+.acts .btn small{display:none}
+.skpad .btn{box-shadow:0 2px 6px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,255,255,.06)}
+.skpad .btn.sk.ready{box-shadow:0 0 10px rgba(159,191,106,.55),inset 0 0 0 1px rgba(255,255,255,.1)}
 .leg{color:#ff9a3c;text-shadow:0 0 6px rgba(255,140,40,.6)}
 .story{white-space:pre-line;line-height:1.7;border-left:3px solid var(--gold);padding:4px 10px;margin:8px 0;color:#ece2c8}
 .qrow{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--edge)}
@@ -176,29 +190,29 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
       <div class="bar"><i id="mpF"></i><span id="mpT"></span></div>
       <div class="bar xp"><i id="xpF"></i></div>
     </div>
-    <div class="gold">金幣<b id="gold">0</b><div id="online"></div></div>
+    <div class="gold"><i class="uic gi" style="--i:22"></i><b id="gold">0</b><div id="online"></div></div>
   </div>
   <div id="stage"><canvas id="cv"></canvas>
     <div id="log" aria-live="polite"></div>
     <div id="joy" aria-hidden="true"><div id="joyK"></div></div>
     <div class="skpad">
-      <button class="btn" id="bPot">藥水<small id="cPot">×0</small></button>
-      <button class="btn sk" id="bS2"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
-      <button class="btn sk" id="bS1"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
-      <button class="btn sk" id="bS0"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
-      <button class="btn" id="bAtk">攻擊</button>
+      <button class="btn" id="bPot"><i class="uic" style="--i:13"></i><small id="cPot">×0</small></button>
+      <button class="btn sk" id="bS2"><i class="uic ski"></i><span class="sn">技能</span><small></small><i class="cdv"></i></button>
+      <button class="btn sk" id="bS1"><i class="uic ski"></i><span class="sn">技能</span><small></small><i class="cdv"></i></button>
+      <button class="btn sk" id="bS0"><i class="uic ski"></i><span class="sn">技能</span><small></small><i class="cdv"></i></button>
+      <button class="btn" id="bAtk"><i class="uic" style="--i:12"></i><span>攻擊</span></button>
     </div>
     <button class="btn fbtn" id="bZoom" aria-label="畫面縮放">100%</button>
   </div>
   <form id="fChat"><select id="chatCh" aria-label="頻道"><option value="map">地圖</option><option value="all">全頻</option><option value="party">隊伍</option><option value="clan">血盟</option></select><input id="chatIn" maxlength="120" placeholder="說點什麼…（/名字 訊息 = 私訊）" autocomplete="off"><button class="btn">送出</button></form>
   <div class="acts">
-    <button class="btn" id="bAuto">自動<small>狩獵</small></button>
-    <button class="btn" id="bQuest">任務<small id="cQuest">主線</small></button>
-    <button class="btn" id="bBag">角色<small>背包</small></button>
-    <button class="btn" id="bRet">回村<small id="cRet">×0</small></button>
-    <button class="btn" id="bSocial">社交<small>隊伍</small></button>
-    <button class="btn" id="bPk">PK<small>模式</small></button>
-    <button class="btn" id="bChat">聊天<small>輸入</small></button>
+    <button class="btn" id="bAuto"><i class="uic mi" style="--i:14"></i>自動<small>狩獵</small></button>
+    <button class="btn" id="bQuest"><i class="uic mi" style="--i:15"></i>任務<small id="cQuest">主線</small></button>
+    <button class="btn" id="bBag"><i class="uic mi" style="--i:16"></i>角色<small>背包</small></button>
+    <button class="btn" id="bRet"><i class="uic mi" style="--i:17"></i>回村<small id="cRet">×0</small></button>
+    <button class="btn" id="bSocial"><i class="uic mi" style="--i:18"></i>社交<small>隊伍</small></button>
+    <button class="btn" id="bPk"><i class="uic mi" style="--i:19"></i>PK<small>模式</small></button>
+    <button class="btn" id="bChat"><i class="uic mi" style="--i:20"></i>聊天<small>輸入</small></button>
   </div>
 </div>
 <div id="overlay" hidden><div class="panel"><header><h2 id="pTitle"></h2><button class="close" id="pClose">關閉</button></header><div id="pBody"></div></div></div>

@@ -205,7 +205,17 @@ function renderGround(m){if(renderGroundTiles(m)){finishGround(m);return;}const 
     if((ch=='s'||ch=='k')&&R()<.12){const a=rx()|0,b=ry()|0;x.fillStyle='#6e5a3a';x.fillRect(a,b,6,1);x.fillRect(a+5,b+1,5,1);x.fillRect(a+9,b+2,4,1);}
     if((ch=='f'||ch=='F')&&R()<.15){const a=rx()|0,b=ry()|0;x.fillStyle='#4a403a';x.fillRect(a,b,4,3);x.fillStyle='#5a4e46';x.fillRect(a,b,4,1);}}
   m.groundCv=c;finishGround(m);}
-function finishGround(m){const W=m.W,H=m.H;
+const DECOR_SET={village:[0,1,2,3,4,6,10,32,36,39,40,4,0],forest:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,41,42,45,4,5,4],waste:[16,17,18,19,20,21,22,23,24,25,10,25,24],cave:[26,27,28,29,30,31,45,46,47,10,29,30]};
+const DECOR_GLOW={15:'120,200,255',26:'255,150,60',27:'255,90,30',28:'255,120,40',31:'255,60,60',46:'255,200,120',47:'255,200,120'};
+function decorate(m){ if(!DECORIMG||!DECORIMG.naturalWidth||m.decorated) return; m.decorated=true; const set=DECOR_SET[m.id]; if(!set) return;
+  const x=m.groundCv.getContext('2d'),R=rng(m.def.seed*13+5),W=m.W,H=m.H,ox=H*HW,dens={village:.07,forest:.16,waste:.1,cave:.09}[m.id],sz=DECOR.sz;
+  const nearPortal=(i,j)=>m.portals.some(p=>Math.abs(p.x-i)<=1&&Math.abs(p.y-j)<=1);
+  for(let j=0;j<H;j++)for(let i=0;i<W;i++){ const k=j*W+i,g=m.g[k]; if(m.blk[k]||g=='w'||g=='l'||g=='c'||nearPortal(i,j)) continue; if(R()>dens) continue;
+    if(m.heal&&i>=m.heal.x-1&&i<=m.heal.x+m.heal.w&&j>=m.heal.y-1&&j<=m.heal.y+m.heal.h) continue;
+    const id=set[Math.floor(R()*set.length)],cx=(i-j)*HW+ox+(R()-.5)*30,cy=(i+j+1)*HH+(R()-.5)*12,s=.7+R()*.25,d=sz*s;
+    x.save(); x.translate(Math.round(cx),Math.round(cy)); if(R()<.5) x.scale(-1,1); x.drawImage(DECORIMG,(id%8)*sz,Math.floor(id/8)*sz,sz,sz,-d/2,-d*.8,d,d); x.restore();
+    if(DECOR_GLOW[id]&&m.lights.length<80) m.lights.push({x:i+.5,y:j+.5,r:1.1,c:DECOR_GLOW[id],night:m.id!=='cave',h:6}); } }
+function finishGround(m){const W=m.W,H=m.H; decorate(m);
   const mm=mk(W*3,H*3),y=mm.getContext('2d');
   for(let j=0;j<H;j++)for(let i=0;i<W;i++){const k=j*W+i,g=m.g[k];y.fillStyle=g=='w'?'#3a6e98':g=='l'?'#c04a1a':m.blk[k]?'#121512':(m.id=='cave'?'#5a4a40':m.id=='waste'?'#a8884b':'#4c7a3a');y.fillRect(i*3,j*3,3,3);}
   m.miniCv=mm;m.anim=[];for(let k=0;k<W*H;k++)if(m.g[k]=='w'||m.g[k]=='l')m.anim.push(k);
