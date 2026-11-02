@@ -411,7 +411,7 @@ function draw(){const m=cur;OX=m.H*HW;const WWp=(m.W+m.H)*HW,WHp=(m.W+m.H)*HH;
       ctx.beginPath();ctx.arc(-6,0,p.big?24:17,-1.3+k*.6,1.3+k*.6);ctx.stroke();ctx.restore();ctx.globalAlpha=1;continue;}
     if(p.type=='ring'){ctx.strokeStyle=`rgba(${p.c},${1-k})`;ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(X,Y,p.r*k,p.r*k*.5,0,0,7);ctx.stroke();continue;}
     ctx.globalAlpha=p.type=='leaf'?Math.min(1,(1-k)*2):1-k*.6;ctx.fillStyle=p.c;ctx.fillRect(Math.round(X),Math.round(Y),p.s,p.s);ctx.globalAlpha=1;}
-  const di=dayInfo();NIGHT=m.id=='cave'?0:(1-di.day)*.48;const dark=Math.min(.9,m.dark+NIGHT);
+  const di=dayInfo();NIGHT=m.id=='cave'?0:(1-di.day)*.3;const dark=Math.min(.9,m.dark+NIGHT);
   if(dark>0.02){const L=lctx,sc=.25;L.globalCompositeOperation='source-over';L.clearRect(0,0,lightCv.width,lightCv.height);
     L.fillStyle=m.id=='waste'&&NIGHT<.2?`rgba(50,26,0,${dark})`:`rgba(4,6,16,${dark})`;L.fillRect(0,0,lightCv.width,lightCv.height);L.globalCompositeOperation='destination-out';
     const hole=(wx,wy,r,a)=>{const X=(wx-cam.x)*sc,Y=(wy-cam.y)*sc,R=r*40*sc;if(X<-R||Y<-R||X>lightCv.width+R||Y>lightCv.height+R)return;const g=L.createRadialGradient(X,Y,0,X,Y,R);g.addColorStop(0,`rgba(0,0,0,${a})`);g.addColorStop(1,'rgba(0,0,0,0)');L.fillStyle=g;L.fillRect(X-R,Y-R,R*2,R*2);};

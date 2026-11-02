@@ -256,7 +256,7 @@ function drawAmbient(){ const m=cur; if(!m) return;
   if(m.id==='forest'&&NIGHT>.15&&Math.random()<.5) part(cam.x+rnd(0,VW),cam.y+rnd(VH*.2,VH),{vx:rnd(-8,8),vy:rnd(-8,8),g:0,c:pick(['#e8ff8a','#c8f060']),life:rnd(1.5,3),s:2,type:'leaf'});
   if(m.id==='waste'&&Math.random()<.3) part(cam.x-4,cam.y+rnd(0,VH),{vx:rnd(40,80),vy:rnd(-5,5),g:0,c:'rgba(220,200,160,.5)',life:4,s:2,type:'leaf'});
   // soft vignette
-  const g=ctx.createRadialGradient(VW/2,VH/2,Math.min(VW,VH)*.45,VW/2,VH/2,Math.max(VW,VH)*.75); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,.35)'); ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH); }
+  const g=ctx.createRadialGradient(VW/2,VH/2,Math.min(VW,VH)*.45,VW/2,VH/2,Math.max(VW,VH)*.75); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,.16)'); ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH); }
 function wrapText(t,maxW){ const out=[]; let line=''; for(const ch of t){ if(ctx.measureText(line+ch).width>maxW&&line){ out.push(line); line=ch; } else line+=ch; } if(line) out.push(line); return out; }
 function drawTracker(){ if(!ME) return; const q=QUESTS[ME.mq],maxW=Math.min(220,VW*.46),rows=[];
   ctx.font='12px '+FONT; ctx.textAlign='left';
@@ -343,6 +343,9 @@ function updateFx(dt){
 /* ---------- input ---------- */
 let ZOOM=matchMedia('(pointer:coarse)').matches?.75:1; try{ const z=+localStorage.getItem('sm_zoom2'); if(z) ZOOM=z; }catch{}
 let hideTrack=false; try{ hideTrack=localStorage.getItem('sm_track')==='0'; }catch{}
+const BRI=[['標準',1,1],['明亮',1.12,1.08],['很亮',1.25,1.12]]; let bri=1; try{ const v=localStorage.getItem('sm_bri'); if(v!=null) bri=+v; }catch{}
+function applyBri(){ const b=BRI[bri]||BRI[1]; const cv=document.getElementById('cv'); if(cv) cv.style.filter=b[1]===1?'':`brightness(${b[1]}) saturate(${b[2]})`; }
+setTimeout(applyBri,0);
 let hideOthers=false; try{ hideOthers=localStorage.getItem('sm_hide')==='1'; }catch{}
 const isTouch=matchMedia('(pointer:coarse)').matches||('ontouchstart' in window&&navigator.maxTouchPoints>0); if(isTouch) document.body.classList.add('touch');
 function resize(){const r=$('#stage').getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1),cw=Math.max(100,r.width-4),ch=Math.max(100,r.height-4);VW=cw/ZOOM;VH=ch/ZOOM;
@@ -560,6 +563,7 @@ function panelHTML(k,arg){ const c=ME; if(!c) return '';
     <div class="sect">道具</div>${Object.keys(INV_N).map(k=>`<div class="row"><div class="bcell" style="width:40px;flex:none">${icon(INVI[k])}</div><div class="info"><div class="nm">${INV_N[k]}</div></div><span class="num">${c.inv[k]||0}</span>${['pot','big','blue'].includes(k)?`<button class="btn" data-use="${k}" ${c.inv[k]?'':'disabled'}>使用</button>`:''}</div>`).join('')}
     <div class="sect">設定</div><button class="btn wide" data-act="mute">${muted?'開啟音效':'關閉音效'}</button>
     <button class="btn wide ${hideOthers?'on':''}" data-act="hide" style="margin-top:6px">${hideOthers?'其他玩家：已隱藏（隊友仍顯示）':'隱藏其他玩家'}</button>
+    <button class="btn wide" data-act="bri" style="margin-top:6px">畫面亮度：${BRI[bri][0]}（點一下切換）</button>
     <button class="btn wide ${hideTrack?'on':''}" data-act="track" style="margin-top:6px">${hideTrack?'任務提醒：已收起（點左上角也能切換）':'收起左上角任務提醒'}</button>
     <button class="btn wide" data-act="zoom" style="margin-top:6px">畫面縮放：${Math.round(ZOOM*100)}%</button>`; }
   if(k==='social'){ const party=c.party;
@@ -638,6 +642,7 @@ $('#pBody').addEventListener('click',e=>{ const b=e.target.closest('button'); if
   if(D.act==='gomentor'){ closePanel(); const M=MENTOR[ME.cls]; if(cur.id!=='village') return send({t:'ret'}); const n=cur.npcs.find(n=>n.act===(M.npc==='guard'?'guard':'mentor:'+M.npc)); if(n){ pendingAct={x:n.x,y:n.y,act:n.act}; send({t:'move',x:n.x,y:n.y}); } return; }
   if(D.act==='qpanel') return openPanel('quest');
   if(D.act==='goguard'){ closePanel(); if(cur.id!=='village') return send({t:'ret'}); const n=cur.npcs.find(n=>n.act==='guard'); if(n){ pendingAct={x:n.x,y:n.y,act:'guard'}; send({t:'move',x:n.x,y:n.y}); } return; }
+  if(D.act==='bri'){ bri=(bri+1)%BRI.length; try{localStorage.setItem('sm_bri',bri);}catch{} applyBri(); return openPanel('bag'); }
   if(D.act==='hide'){ hideOthers=!hideOthers; try{localStorage.setItem('sm_hide',hideOthers?'1':'0');}catch{} return openPanel('bag'); }
   if(D.act==='track'){ hideTrack=!hideTrack; try{localStorage.setItem('sm_track',hideTrack?'0':'1');}catch{} return openPanel('bag'); }
   if(D.act==='zoom'){ $('#bZoom').onclick(); return openPanel('bag'); }

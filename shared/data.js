@@ -55,9 +55,9 @@ export const MT = {
 
 export const MAPDEF = {
   village:{name:'晨霧村',W:30,H:22,dark:0,seed:3,safe:1},
-  forest:{name:'哭泣森林',tip:'建議 Lv.1～10',W:44,H:34,dark:.32,base:'g',trail:'d',seed:11,mobs:['slime','mush','boar','goblin','wolf'],boss:'treant',tier:1,prev:'village',next:'waste'},
-  waste:{name:'骸骨荒原',tip:'建議 Lv.10～18',W:44,H:34,dark:.08,base:'s',trail:'k',seed:22,mobs:['skel','scorp','mummy','ghoul','worm'],boss:'colossus',tier:2,prev:'forest',next:'cave'},
-  cave:{name:'熔岩洞窟',tip:'建議 Lv.18 以上',W:40,H:32,dark:.8,base:'f',trail:'F',seed:33,mobs:['bat','hound','golem','cultist','dknight'],boss:'firelord',tier:3,prev:'waste',next:null}
+  forest:{name:'哭泣森林',tip:'建議 Lv.1～10',W:44,H:34,dark:.1,base:'g',trail:'d',seed:11,mobs:['slime','mush','boar','goblin','wolf'],boss:'treant',tier:1,prev:'village',next:'waste'},
+  waste:{name:'骸骨荒原',tip:'建議 Lv.10～18',W:44,H:34,dark:0,base:'s',trail:'k',seed:22,mobs:['skel','scorp','mummy','ghoul','worm'],boss:'colossus',tier:2,prev:'forest',next:'cave'},
+  cave:{name:'熔岩洞窟',tip:'建議 Lv.18 以上',W:40,H:32,dark:.55,base:'f',trail:'F',seed:33,mobs:['bat','hound','golem','cultist','dknight'],boss:'firelord',tier:3,prev:'waste',next:null}
 };
 export const SHOP = [
   {k:'pot',n:'紅色藥水',d:'回復 50 HP',p:20,q:[1,10]},
