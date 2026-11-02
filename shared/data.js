@@ -139,7 +139,7 @@ function buildWild(id){ const m=newMap(id),d=m.def,W=m.W,H=m.H,R=rng(d.seed),idx
   m.portals.push({x:entry.x,y:entry.y,to:d.prev,label:'往'+MAPDEF[d.prev].name});
   if(d.next)m.portals.push({x:exit.x,y:exit.y,to:d.next,label:'往'+MAPDEF[d.next].name});
   m.entry=entry;m.exit=exit;m.boss=boss;m.spawn={x:4,y:4};
-  for(const p of m.portals)if(!p.gate)m.lights.push({x:p.x+.5,y:p.y+.5,r:2.6,c:'190,140,255'});
+  for(const p of m.portals)if(!p.gate)m.lights.push({x:p.x+.5,y:p.y+.5,r:2.6,c:p.to==='cave'?'255,130,50':id==='cave'?'255,230,170':'200,230,160'});
   if(id==='cave')for(let k=0;k<W*H;k++)if(m.g[k]==='l'&&R()<.25)m.lights.push({x:k%W+.5,y:(k/W|0)+.5,r:2.4,c:'255,120,40'});
   return finish(m); }
 function finish(m){ m.open=[]; for(let k=0;k<m.W*m.H;k++)if(!m.blk[k])m.open.push(k); return m; }

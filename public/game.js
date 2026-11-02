@@ -305,6 +305,7 @@ let NIGHT=0;
 function dayInfo(){const cyc=((Date.now()/1000+60)/300)%1,day=.5+.5*Math.cos(cyc*Math.PI*2);return{day,label:day>.6?'白天':day>.3?(cyc<.5?'黃昏':'清晨'):'夜晚'};}
 const OBJK={tree:'obj_tree',dtree:'obj_pine',rock:'obj_rock',srock:'obj_srock',dead:'obj_dead',stal:'obj_stal',wall:'obj_stal',crystal:'obj_crystal',lamp:'obj_lamp',barrel:'obj_barrel',crate:'obj_barrel'};
 const OBJS={tree:.95,dtree:.95,rock:.9,srock:1,dead:.95,stal:.85,wall:1.05,crystal:.9,lamp:.9,barrel:.95,crate:.95};
+const ENTK={'forest>waste':'ent_fw','waste>forest':'ent_wf','waste>cave':'ent_wc','cave>waste':'ent_cw'},ENTG={ent_fw:'',ent_wf:'170,220,140',ent_wc:'255,130,40',ent_cw:'255,230,170'};
 function drawObj(o){
   if(o.t=='house'){const hk='obj_house'+(o.v%2),hi=aImg(hk);if(hi){const a=ASSETS[hk],sc=1.28,cx=(PX(o.x+o.w,o.y)+PX(o.x,o.y+o.h))/2-cam.x,by=PY(o.x+o.w,o.y+o.h)-cam.y;
       ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(cx+10,by-40,a.w*.55,40,0,0,7);ctx.fill();
@@ -382,11 +383,12 @@ function drawItem(it){const o=it.o;
   else if(it.t==1){const X=PX(o.x+.5,o.y+.5)-cam.x,Y=PY(o.x+.5,o.y+.5)-cam.y;ctx.fillStyle='rgba(0,0,0,.32)';ctx.beginPath();ctx.ellipse(X,Y,12,5,0,0,7);ctx.fill();
     const ni=npcImg(o.k),nd=NPCIMG[o.k];if(ni)ctx.drawImage(ni,Math.round(X-nd.w/2),Math.round(Y-nd.foot));else ctx.drawImage(npcSpr(o.k),Math.round(X-16),Math.round(Y-47-Math.abs(Math.sin(now*2+o.x))*1.2));label(o.name,X,Y-58);if(npcHint(o)){const b=(Math.sin(now*4)+1)*1.5;ctx.fillStyle='#e8c040';ctx.fillRect(X-2,Y-74-b,4,7);ctx.fillRect(X-2,Y-65-b,4,2);}}
   else if(it.t==2)drawMob(o,Math.round(fx(o)-cam.x),Math.round(fy(o)-cam.y));
-  else if(it.t==5){const p=o,X=Math.round(PX(p.x+.5,p.y+.5)-cam.x),Y=Math.round(PY(p.x+.5,p.y+.5)-cam.y),g=aImg('gate'),a=ASSETS.gate,sc=p.big?1.15:.8,w=a.w*sc,h=a.h*sc;
+  else if(it.t==5){const p=o,X=Math.round(PX(p.x+.5,p.y+.5)-cam.x),Y=Math.round(PY(p.x+.5,p.y+.5)-cam.y),ek=ENTK[cur.id+'>'+p.to],ent=ek&&aImg(ek),g=ent||aImg('gate'),a=ent?ASSETS[ek]:ASSETS.gate,sc=p.big?1.15:ent?.85:.8,w=a.w*sc,h=a.h*sc;
     ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(X,Y+4,w*.42,w*.2,0,0,7);ctx.fill();
     ctx.drawImage(g,Math.round(X-w/2),Math.round(Y-a.cy*sc+10),Math.round(w),Math.round(h));
     // living portal glow inside the arch
-    const pu=(Math.sin(now*3+p.x)+1)/2;ctx.save();ctx.globalCompositeOperation='lighter';const gx=X-4,gy=Y-h*.42,gr=ctx.createRadialGradient(gx,gy,0,gx,gy,26+pu*6);gr.addColorStop(0,`rgba(190,120,255,${.35+pu*.25})`);gr.addColorStop(1,'rgba(120,60,220,0)');ctx.fillStyle=gr;ctx.fillRect(gx-34,gy-34,68,68);ctx.restore();}
+    if(ent){const gc=ENTG[ek];if(gc){const pu=(Math.sin(now*2.4+p.x)+1)/2;ctx.save();ctx.globalCompositeOperation='lighter';const gx=X,gy=Y-h*.3,gr=ctx.createRadialGradient(gx,gy,0,gx,gy,30+pu*6);gr.addColorStop(0,`rgba(${gc},${.22+pu*.18})`);gr.addColorStop(1,`rgba(${gc},0)`);ctx.fillStyle=gr;ctx.fillRect(gx-40,gy-40,80,80);ctx.restore();}}
+    else{const pu=(Math.sin(now*3+p.x)+1)/2;ctx.save();ctx.globalCompositeOperation='lighter';const gx=X-4,gy=Y-h*.42,gr=ctx.createRadialGradient(gx,gy,0,gx,gy,26+pu*6);gr.addColorStop(0,`rgba(190,120,255,${.35+pu*.25})`);gr.addColorStop(1,'rgba(120,60,220,0)');ctx.fillStyle=gr;ctx.fillRect(gx-34,gy-34,68,68);ctx.restore();}}
   else if(it.t==6||it.t==7){ // town wall segment / gatehouse, skewed along the isometric x axis
     const w=it.t==6?{x0:o.x,x1:o.x+1,y:o.y}:{x0:o.g0,x1:o.g1+1,y:o.y},k=it.t==6?'wallseg':'gatehouse',im=aImg(k),a=ASSETS[k],tiles=w.x1-w.x0,vs=it.t==6?.95:.9;
     const X=PX(w.x0,w.y+.5)-cam.x,Y=PY(w.x0,w.y+.5)-cam.y;
