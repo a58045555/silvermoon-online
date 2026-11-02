@@ -328,7 +328,7 @@ function updateFx(dt){
   if(cur.id==='forest'&&Math.random()<dt*2.5)part(cam.x+rnd(0,VW),cam.y-4,{vx:rnd(10,30),vy:rnd(20,40),g:0,c:pick(['#6a9a40','#8ab050','#c8a040']),life:4,s:3,type:'leaf'});
   if(cur.id==='cave'&&Math.random()<dt*10)part(cam.x+rnd(0,VW),cam.y+VH+4,{vx:rnd(-10,10),vy:rnd(-60,-25),g:0,c:pick(['#ff9a3c','#ffd84a','#ff5a2a']),life:3,s:2,type:'leaf'});
   for(const p of parts)if(p.type==='leaf'){p.x+=p.vx*dt;p.y+=p.vy*dt;}
-  for(const p of cur.portals)if(Math.random()<dt*8)part(PX(p.x+.5,p.y+.5)+rnd(-14,14),PY(p.x+.5,p.y+.5)+rnd(-4,4),{vx:rnd(-6,6),vy:rnd(-50,-25),g:0,c:pick(['#c9a8ff','#8a5cff','#fff']),life:rnd(.6,1),s:2});
+  for(const p of cur.portals)if(!p.gate&&Math.random()<dt*8)part(PX(p.x+.5,p.y+.5)+rnd(-14,14),PY(p.x+.5,p.y+.5)+rnd(-4,4),{vx:rnd(-6,6),vy:rnd(-50,-25),g:0,c:pick(['#c9a8ff','#8a5cff','#fff']),life:rnd(.6,1),s:2});
 }
 
 /* ---------- input ---------- */

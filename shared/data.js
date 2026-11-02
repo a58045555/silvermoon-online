@@ -88,8 +88,8 @@ function put(m,t,x,y,v){ const [w,h]=BIG[t]||[1,1]; for(let j=0;j<h;j++)for(let 
   return o; }
 function buildVillage(){ const m=newMap('village'),W=m.W,H=m.H,R=rng(3),ri=(a,b)=>a+Math.floor(R()*(b-a+1));
   const G=(x,y,c)=>{m.g[y*W+x]=c;};
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ if(x<2||y<2||x>=W-2||y>=H-2){ if(!(y>=H-3&&x>=11&&x<=18))put(m,'tree',x,y,ri(0,2)); } }
-  for(let x=3;x<=26;x++)G(x,8,'c'); for(let y=8;y<=H-1;y++){G(14,y,'c');G(15,y,'c');} for(let x=12;x<=17;x++){G(x,H-2,'c');G(x,H-1,'c');}
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ if(x<2||y<2||x>=W-2||y>=H-2){ if(y<H-2||x<2||x>=W-2)put(m,'tree',x,y,ri(0,2)); } }
+  for(let x=3;x<=26;x++)G(x,8,'c'); for(let y=8;y<=H-1;y++){G(14,y,'c');G(15,y,'c');} 
   for(let y=9;y<=12;y++)for(let x=12;x<=17;x++)G(x,y,'c');
   for(const [a,b] of [[4,6],[5,6],[4,7],[5,7],[23,6],[24,6],[23,7],[24,7],[5,16],[6,16],[22,16],[23,16]])G(a,b,'c');
   for(let x=5;x<=23;x++)G(x,17,'c');
@@ -101,8 +101,10 @@ function buildVillage(){ const m=newMap('village'),W=m.W,H=m.H,R=rng(3),ri=(a,b)
   for(const [a,b,v] of [[10,3,0],[18,2,2],[26,11,1],[9,15,0],[26,19,2],[3,19,1],[19,11,2],[9,19,1],[21,19,0]])put(m,'tree',a,b,v);
   const npc=(k,x,y,name,act)=>{m.npcs.push({k,x,y,name,act});m.blk[y*W+x]=1;};
   npc('smith',6,6,'鐵匠 巴爾克','smith');npc('merchant',22,6,'雜貨商 莉娜','shop');npc('guard',13,18,'守衛 艾德','guard');
-  m.portals.push({x:14,y:H-1,to:'forest',label:'往哭泣森林',big:1});
-  for(let x=11;x<=18;x++) if(x<13||x>16) m.blk[(H-1)*W+x]=1; // the gate stands in the opening
+  // town wall along the south edge with a gatehouse over the road (x 14-15)
+  m.wall={y:H-1,x0:2,x1:W-3,g0:13,g1:16};
+  for(let x=2;x<=W-3;x++) if(x<14||x>15) m.blk[(H-1)*W+x]=1;
+  m.portals.push({x:14,y:H-1,to:'forest',label:'往哭泣森林',gate:1},{x:15,y:H-1,to:'forest',label:'',gate:1});
   m.heal={x:14,y:10,w:2,h:2}; m.spawn={x:15,y:14};
   return finish(m); }
 function buildWild(id){ const m=newMap(id),d=m.def,W=m.W,H=m.H,R=rng(d.seed),idx=(x,y)=>y*W+x;
@@ -135,7 +137,7 @@ function finish(m){ m.open=[]; for(let k=0;k<m.W*m.H;k++)if(!m.blk[k])m.open.pus
 export function buildMap(id){ return id==='village'?buildVillage():buildWild(id); }
 // where you appear when arriving through a portal from map `from`
 export function arrivalPoint(m,from){
-  if(m.id==='village')return{x:14,y:18};
+  if(m.id==='village')return{x:15,y:19};
   if(from===m.def.prev)return{x:m.entry.x+1,y:m.entry.y+1};
   return{x:m.exit.x+1,y:m.exit.y-1};
 }
