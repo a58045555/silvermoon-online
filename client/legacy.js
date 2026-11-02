@@ -362,7 +362,7 @@ function draw(){const m=cur;OX=m.H*HW;const WWp=(m.W+m.H)*HW,WHp=(m.W+m.H)*HH;
   for(const n of m.npcs)A.push({k:n.x+n.y+.01,tx:n.x,ty:n.y,sx:PX(n.x+.5,n.y+.5)-cam.x,t:1,o:n});
   for(const mb of m.mobs){const sx=fx(mb)-cam.x,sy=fy(mb)-cam.y;if(vis(sx,sy))A.push({k:mb.rx+mb.ry+.02,tx:Math.round(mb.rx),ty:Math.round(mb.ry),sx,t:2,o:mb});}
   for(const c of m.corpses)A.push({k:c.m.rx+c.m.ry+.02,tx:c.m.x,ty:c.m.y,sx:fx(c.m)-cam.x,t:3,o:c});
-  for(const e of players.values())A.push({k:e.rx+e.ry+.03,tx:Math.round(e.rx),ty:Math.round(e.ry),sx:fx(e)-cam.x,t:4,o:e});
+  for(const e of players.values())if(!hideOthers||e===P||e.party)A.push({k:e.rx+e.ry+.03,tx:Math.round(e.rx),ty:Math.round(e.ry),sx:fx(e)-cam.x,t:4,o:e});
   A.sort((a,b)=>a.k-b.k);
   for(const p of parts)if(p.type=='slash'&&p.back&&!(p.delay>0))drawSlash(p,p.x-cam.x,p.y-cam.y,p.t/p.life);
   for(const it of A){for(const b of B){if(b.done)continue;const o=b.o;if((it.tx>=o.x+o.w||it.ty>=o.y+o.h)&&it.sx>b.l-24&&it.sx<b.r+24){drawObj(o);b.done=true;}}drawItem(it);}

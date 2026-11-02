@@ -22,7 +22,7 @@ button,input,select{touch-action:manipulation}
 body{height:100%;margin:0;background:var(--bg);color:var(--parch);font-family:var(--pix);overflow:hidden;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
-#app{height:100%;max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:7px;padding-block:8px}
+#app{height:100%;max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:7px;padding-block:8px}
 .hud{display:grid;grid-template-columns:auto 1fr auto;gap:6px 10px;align-items:center;background:linear-gradient(#1f251f,#151a16);border:2px solid var(--edge);padding:7px 10px}
 .who{display:grid;gap:1px}
 .lv{font-size:15px;color:var(--gold);white-space:nowrap}
@@ -38,8 +38,26 @@ body{height:100%;margin:0;background:var(--bg);color:var(--parch);font-family:va
 #stage{position:relative;flex:1;min-height:0;border:2px solid var(--edge);background:#060806;overflow:hidden}
 #cv{display:block;touch-action:none}
 
-.acts{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
-.skbar{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.acts{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.skpad{position:absolute;right:8px;bottom:8px;display:grid;grid-template-columns:repeat(2,70px);gap:8px;z-index:3}
+.skpad .btn{height:70px;border-radius:50%;padding:0 4px;background:rgba(27,31,25,.8);font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.skpad .btn small{font-size:9px}
+#bS0{width:70px}
+.fbtn{position:absolute;right:8px;bottom:164px;z-index:3;padding:5px 8px;font-size:11px;background:rgba(27,31,25,.8)}
+#log{position:absolute;left:6px;bottom:6px;width:min(52%,440px);max-height:100px;overflow:hidden;pointer-events:none;z-index:2;font-size:12px;line-height:16px;padding:4px 6px;
+  background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.5) 30%);text-shadow:0 1px 1px #000}
+#joy{display:none;position:absolute;left:14px;bottom:14px;width:128px;height:128px;border-radius:50%;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.22);z-index:3;touch-action:none}
+#joyK{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(232,196,106,.35);border:2px solid rgba(232,196,106,.7)}
+body.touch{padding-left:max(4px,env(safe-area-inset-left,0px));padding-right:max(4px,env(safe-area-inset-right,0px))}
+body.touch #app{gap:4px;padding-block:4px}
+body.touch #joy{display:block}
+body.touch #log{bottom:154px;width:64%;max-height:82px}
+body.touch #fChat{display:none}
+body.touch.chatOpen #fChat{display:flex}
+body:not(.touch) #bChat{display:none}
+body.touch .acts{grid-template-columns:repeat(7,1fr);gap:3px}
+body.touch .acts .btn{padding:6px 0;font-size:12px}
+body:not(.touch) .acts{grid-template-columns:repeat(6,1fr)}
 .btn.sk{position:relative;overflow:hidden;border-color:#5a6e4a}
 .btn.sk .sn{position:relative;z-index:1}.btn.sk small{position:relative;z-index:1}
 .btn.sk .cdv{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(0,0,0,.62);pointer-events:none}
@@ -111,7 +129,6 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
 .badge{display:inline-block;min-width:16px;padding:0 4px;margin-left:4px;font-size:10px;line-height:16px;background:var(--danger);color:#fff;border-radius:8px}
 @media (prefers-reduced-motion:reduce){#fx.ok,#fx.boom{animation:none}.bar>i{transition:none}}
 
-#log{height:84px;overflow-y:auto;font-size:12px;line-height:16px;color:var(--dim);padding:2px 4px;background:#0a0d0b;border:1px solid var(--edge)}
 #log .l-log{color:var(--dim)}#log .l-sys{color:#e8c46a}#log .l-all{color:#ece2c8}#log .l-map{color:#cfd8c8}#log .l-party{color:#8fd8ff}#log .l-clan{color:#9fe09f}#log .l-w{color:#e0a0ff}
 #log b{font-weight:400}
 #fChat{display:flex;gap:4px}
@@ -159,15 +176,18 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
     </div>
     <div class="gold">金幣<b id="gold">0</b><div id="online"></div></div>
   </div>
-  <div id="stage"><canvas id="cv"></canvas></div>
-  <div id="log" aria-live="polite"></div>
-  <form id="fChat"><select id="chatCh" aria-label="頻道"><option value="map">地圖</option><option value="all">全頻</option><option value="party">隊伍</option><option value="clan">血盟</option></select><input id="chatIn" maxlength="120" placeholder="說點什麼…（/名字 訊息 = 私訊）" autocomplete="off"><button class="btn">送出</button></form>
-  <div class="skbar">
-    <button class="btn sk" id="bS0"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
-    <button class="btn sk" id="bS1"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
-    <button class="btn sk" id="bS2"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
-    <button class="btn" id="bPot">藥水<small id="cPot">×0</small></button>
+  <div id="stage"><canvas id="cv"></canvas>
+    <div id="log" aria-live="polite"></div>
+    <div id="joy" aria-hidden="true"><div id="joyK"></div></div>
+    <div class="skpad">
+      <button class="btn sk" id="bS2"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
+      <button class="btn" id="bPot">藥水<small id="cPot">×0</small></button>
+      <button class="btn sk" id="bS1"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
+      <button class="btn sk" id="bS0"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
+    </div>
+    <button class="btn fbtn" id="bZoom" aria-label="畫面縮放">100%</button>
   </div>
+  <form id="fChat"><select id="chatCh" aria-label="頻道"><option value="map">地圖</option><option value="all">全頻</option><option value="party">隊伍</option><option value="clan">血盟</option></select><input id="chatIn" maxlength="120" placeholder="說點什麼…（/名字 訊息 = 私訊）" autocomplete="off"><button class="btn">送出</button></form>
   <div class="acts">
     <button class="btn" id="bAuto">自動<small>狩獵</small></button>
     <button class="btn" id="bQuest">任務<small id="cQuest">主線</small></button>
@@ -175,6 +195,7 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
     <button class="btn" id="bRet">回村<small id="cRet">×0</small></button>
     <button class="btn" id="bSocial">社交<small>隊伍</small></button>
     <button class="btn" id="bPk">PK<small>模式</small></button>
+    <button class="btn" id="bChat">聊天<small>輸入</small></button>
   </div>
 </div>
 <div id="overlay" hidden><div class="panel"><header><h2 id="pTitle"></h2><button class="close" id="pClose">關閉</button></header><div id="pBody"></div></div></div>

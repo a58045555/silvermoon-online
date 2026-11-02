@@ -302,21 +302,26 @@ function updateFx(dt){
 }
 
 /* ---------- input ---------- */
-function resize(){const r=$('#stage').getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1);VW=Math.max(100,r.width-4);VH=Math.max(100,r.height-4);
-  cv.width=Math.round(VW*d);cv.height=Math.round(VH*d);cv.style.width=VW+'px';cv.style.height=VH+'px';ctx.setTransform(d,0,0,d,0,0);ctx.imageSmoothingEnabled=false;lightCv.width=Math.ceil(VW/4);lightCv.height=Math.ceil(VH/4);}
+let ZOOM=1; try{ ZOOM=+localStorage.getItem('sm_zoom')||1; }catch{}
+let hideOthers=false; try{ hideOthers=localStorage.getItem('sm_hide')==='1'; }catch{}
+const isTouch=matchMedia('(pointer:coarse)').matches||('ontouchstart' in window&&navigator.maxTouchPoints>0); if(isTouch) document.body.classList.add('touch');
+function resize(){const r=$('#stage').getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1),cw=Math.max(100,r.width-4),ch=Math.max(100,r.height-4);VW=cw/ZOOM;VH=ch/ZOOM;
+  cv.width=Math.round(cw*d);cv.height=Math.round(ch*d);cv.style.width=cw+'px';cv.style.height=ch+'px';ctx.setTransform(d*ZOOM,0,0,d*ZOOM,0,0);ctx.imageSmoothingEnabled=false;lightCv.width=Math.ceil(VW/4);lightCv.height=Math.ceil(VH/4);
+  $('#bZoom').textContent=Math.round(ZOOM*100)+'%';}
+$('#bZoom').onclick=()=>{ ZOOM=ZOOM>=1.5?1:ZOOM>=1.25?1.5:1.25; try{localStorage.setItem('sm_zoom',ZOOM);}catch{} resize(); };
 window.addEventListener('resize',resize);
 // keep the canvas matched to its box whenever the layout changes; block browser zoom gestures on phones
 try{ let rT=0; new ResizeObserver(()=>{ cancelAnimationFrame(rT); rT=requestAnimationFrame(resize); }).observe($('#stage')); }catch{}
 for(const ev of ['gesturestart','gesturechange']) document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
 document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
 cv.addEventListener('pointerdown',e=>{ audioOn(); if(!P||!cur||P.dead) return;
-  const r=cv.getBoundingClientRect(),wx=e.clientX-r.left+cam.x,wy=e.clientY-r.top+cam.y,u=wx-OX;
+  const r=cv.getBoundingClientRect(),wx=(e.clientX-r.left)/ZOOM+cam.x,wy=(e.clientY-r.top)/ZOOM+cam.y,u=wx-OX;
   const tx=Math.floor((u/HW+wy/HH)/2),ty=Math.floor((wy/HH-u/HW)/2);
-  const sx0=e.clientX-r.left,sy0=e.clientY-r.top;
+  const sx0=(e.clientX-r.left)/ZOOM,sy0=(e.clientY-r.top)/ZOOM;
   if(trackRect&&sx0>=trackRect.x&&sx0<=trackRect.x+trackRect.w&&sy0>=trackRect.y&&sy0<=trackRect.y+trackRect.h){ openPanel('quest'); return; }
   pendingAct=null; marker=null;
   let best=null,bd=30; for(const m of cur.mobs){ const d=Math.hypot(fx(m)-wx,fy(m)-(m.boss?40:14)-wy)/(m.boss?2.2:1); if(d<bd){bd=d;best=m;} }
-  for(const p of players.values()){ if(p===P) continue; const d=Math.hypot(fx(p)-wx,fy(p)-28-wy); if(d<bd){bd=d;best=p;} }
+  for(const p of players.values()){ if(p===P||(hideOthers&&!p.party)) continue; const d=Math.hypot(fx(p)-wx,fy(p)-28-wy); if(d<bd){bd=d;best=p;} }
   if(best&&!best.isPlayer){ myTargetId=best.id; send({t:'attack',id:best.id}); parts.push({type:'ring',x:fx(best),y:fy(best),t:0,life:.3,r:22,c:'255,90,70'}); return; }
   if(best&&best.isPlayer){ if(ME.pk){ myTargetId=best.id; send({t:'attack',id:best.id}); } else openPanel('player',best); return; }
   { let bl=null,bld=24; for(const L of loot.values()){ const d=Math.hypot(PX(L.x+.5,L.y+.5)-wx,PY(L.x+.5,L.y+.5)-10-wy); if(d<bld){bld=d;bl=L;} } if(bl){ myTargetId=null; send({t:'pick',id:bl.id}); marker={x:bl.x,y:bl.y}; return; } }
@@ -329,14 +334,37 @@ cv.addEventListener('pointerdown',e=>{ audioOn(); if(!P||!cur||P.dead) return;
 window.addEventListener('keydown',e=>{ if(!inGame||!P||e.target.tagName==='INPUT') return; if(!$('#overlay').hidden) return;
   const k={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]}[e.key];
   if(k){ e.preventDefault(); myTargetId=null; send({t:'move',x:P.x+k[0],y:P.y+k[1]}); }
+  if('wasdWASD'.includes(e.key)&&e.key.length===1){ keysDown.add(e.key.toLowerCase()); updKeyJoy(); }
+  if(e.key==='+'||e.key==='=') $('#bZoom').onclick();
   if(e.key==='Enter'){ e.preventDefault(); $('#chatIn').focus(); }
   if(e.key==='1') usePot(); if(e.key==='2'||e.key==='3'||e.key==='4') castSkill(+e.key-2); });
+window.addEventListener('keyup',e=>{ if(e.key&&keysDown.delete(e.key.toLowerCase())) updKeyJoy(); });
+window.addEventListener('blur',()=>{ keysDown.clear(); updKeyJoy(); });
+/* ---------- joystick (phones) and WASD (computers) ---------- */
+const keysDown=new Set(); let joyV=null, joyHold=0, joySendT=0, joyPtr=null, keyJoy=false;
+function updKeyJoy(){ const x=(keysDown.has('d')?1:0)-(keysDown.has('a')?1:0), y=(keysDown.has('s')?1:0)-(keysDown.has('w')?1:0);
+  if(x||y){ const l=Math.hypot(x,y); joyV={x:x/l,y:y/l}; keyJoy=true; } else if(keyJoy){ keyJoy=false; joyV=null; send({t:'stop'}); } }
+{ const J=$('#joy'),K=$('#joyK');
+  const upd=e=>{ const r=J.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),l=Math.hypot(dx,dy),m=Math.min(l,46);
+    K.style.transform=`translate(${l?dx/l*m:0}px,${l?dy/l*m:0}px)`; joyV=l<10?null:{x:dx/l,y:dy/l}; };
+  J.addEventListener('pointerdown',e=>{ audioOn(); e.preventDefault(); joyPtr=e.pointerId; J.setPointerCapture(e.pointerId); upd(e); joySendT=0; });
+  J.addEventListener('pointermove',e=>{ if(e.pointerId===joyPtr) upd(e); });
+  const end=e=>{ if(e.pointerId!==joyPtr) return; joyPtr=null; joyV=null; K.style.transform=''; send({t:'stop'}); };
+  J.addEventListener('pointerup',end); J.addEventListener('pointercancel',end); }
+const JDIRS=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+function joyThink(dt){ joyHold-=dt; if(!joyV||!P||P.dead||!cur) return; joyHold=1.2; joySendT-=dt; if(joySendT>0) return; joySendT=.12;
+  // screen direction -> isometric grid direction
+  const gx=joyV.x/HW+joyV.y/HH, gy=joyV.y/HH-joyV.x/HW, oct=Math.round(Math.atan2(gy,gx)/(Math.PI/4));
+  for(const off of [0,1,-1]){ const [dx,dy]=JDIRS[((oct+off)%8+8)%8];
+    for(let n=3;n>=1;n--){ const x=P.x+dx*n,y=P.y+dy*n; if(x<0||y<0||x>=cur.W||y>=cur.H||cur.blk[y*cur.W+x]) continue;
+      if(myTargetId){ myTargetId=null; } pendingAct=null; marker=null; send({t:'move',x,y}); return; } } }
 function checkPending(){ if(!pendingAct||!P) return; const a=pendingAct, near=a.big?Math.max(Math.abs(P.x-a.x-.5),Math.abs(P.y-a.y-.5))<=1.6:cheb(P,a)<=1;
   if(near&&Math.abs(P.rx-P.x)<.1&&Math.abs(P.ry-P.y)<.1){ pendingAct=null; if(a.act==='heal') send({t:'heal'}); else openPanel(a.act); } }
 function usePot(){ if(!ME) return; if(ME.inv.pot) send({t:'use',k:'pot'}); else if(ME.inv.big) send({t:'use',k:'big'}); else addLog('紅色藥水用完了，回村找莉娜買。'); }
 $('#bPot').onclick=()=>{audioOn();usePot();};
 function castSkill(i){ if(!ME) return; const sk=SKILLS[ME.cls][i]; if(ME.lv<sk.lv) return addLog(`${sk.n}：Lv.${sk.lv} 解鎖。${sk.d}`); if(cdEnd[i]>now) return; if(sk.tgt&&!myTarget()) return addLog(`${sk.n}要先點一隻怪物。`); send({t:'skill',i}); }
 for(let i=0;i<3;i++) $('#bS'+i).onclick=()=>{audioOn();castSkill(i);};
+$('#bChat').onclick=()=>{ document.body.classList.toggle('chatOpen'); if(document.body.classList.contains('chatOpen')) setTimeout(()=>$('#chatIn').focus(),50); };
 $('#bQuest').onclick=()=>{audioOn();openPanel('quest');};
 $('#bRet').onclick=()=>{audioOn();if(cur?.id==='village')return addLog('你已經在村子裡了。');send({t:'ret'});};
 $('#bBag').onclick=()=>{audioOn();bagSel=null;openPanel('bag');};
@@ -358,7 +386,7 @@ function autoSkill(t){ const L=SKILLS[ME.cls],c=ME.cls,hp=ME.hp/ME.maxHP; const 
   if(c==='darkelf'&&ok(1)&&inR&&big&&!(t.psEnd>now)) return 1;
   if(ok(0)&&inR&&(t.boss||t.hp>ME.atk*2)) return 0;
   return -1; }
-function autoThink(dt){ if(!auto||!ME||!P||P.dead) return; autoT-=dt; potT-=dt; skillT-=dt; dodgeT-=dt;
+function autoThink(dt){ if(!auto||!ME||!P||P.dead||joyHold>0) return; autoT-=dt; potT-=dt; skillT-=dt; dodgeT-=dt;
   // step out of red circles
   if(dodgeT<=0&&inCircle(P.x,P.y)){ let best=null,bd=1e9; for(let dx=-3;dx<=3;dx++)for(let dy=-3;dy<=3;dy++){ const x=P.x+dx,y=P.y+dy; if(x<0||y<0||x>=cur.W||y>=cur.H||cur.blk[y*cur.W+x]||inCircle(x,y)) continue; const d=Math.hypot(dx,dy); if(d<bd){bd=d;best=[x,y];} }
     if(best){ dodgeT=.6; myTargetId=null; send({t:'move',x:best[0],y:best[1]}); return; } }
@@ -383,13 +411,14 @@ function autoThink(dt){ if(!auto||!ME||!P||P.dead) return; autoT-=dt; potT-=dt; 
 
 /* ---------- chat & log ---------- */
 const CHN={sys:'系統',all:'全頻',map:'地圖',party:'隊伍',clan:'血盟',w:'私訊'};
-function addLine(html){ logs.push(html); if(logs.length>60) logs.shift(); const el=$('#log'); el.innerHTML=logs.slice(-40).join(''); el.scrollTop=el.scrollHeight; }
+function addLine(html){ logs.push(html); if(logs.length>60) logs.shift(); const el=$('#log'); el.innerHTML=logs.slice(-8).join(''); el.scrollTop=el.scrollHeight; }
 function addLog(msg){ addLine(`<div class="l-log">${msg}</div>`); }
 function addChat(m){ const who=m.ch==='w'?(m.from===ME?.name?`→${esc(m.to)}`:`${esc(m.from)}→你`):esc(m.from);
   addLine(`<div class="l-${m.ch}"><b>[${CHN[m.ch]||m.ch}] ${who}</b>：${esc(m.msg)}</div>`);
   if(m.ch!=='sys'&&m.ch!=='w'){ const e=[...players.values()].find(p=>p.name===m.from); if(e) floats.push({x:fx(e),y:fy(e)-80,txt:m.msg.slice(0,18),col:'#ffffff',t:-.8,big:false}); } }
 $('#chatCh').onchange=e=>{chatCh=e.target.value;};
 $('#fChat').onsubmit=e=>{ e.preventDefault(); const v=$('#chatIn').value.trim(); if(!v) return; $('#chatIn').value='';
+  document.body.classList.remove('chatOpen');
   const w=v.match(/^\/(\S+)\s+(.+)/); if(w) send({t:'chat',ch:'w',to:w[1],msg:w[2]}); else send({t:'chat',ch:chatCh,msg:v}); $('#chatIn').blur(); };
 let toastT=null; function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>el.hidden=true,3500); }
 
@@ -424,7 +453,9 @@ function panelHTML(k,arg){ const c=ME; if(!c) return '';
     <div class="derived"><span>攻擊力<b>${c.atk}</b></span><span>防禦力<b>${c.def}</b></span><span>HP<b>${c.maxHP}</b></span><span>MP<b>${c.maxMP}</b></span><span>閃避<b>${Math.round(c.dodge*100)}%</b></span><span>爆擊<b>${Math.round(c.crit*100)}%</b></span></div>
     <div class="sect">背包（${c.bag.length}/${BAGMAX}）</div>${c.bag.length?`<div class="bgrid">${bg}</div>`:'<p class="ds">打怪會掉裝備，也可以跟鐵匠買。</p>'}${bagSel&&bagSel.from==='bag'?det:''}
     <div class="sect">道具</div>${Object.keys(INV_N).map(k=>`<div class="row"><div class="bcell" style="width:40px;flex:none">${icon(INVI[k])}</div><div class="info"><div class="nm">${INV_N[k]}</div></div><span class="num">${c.inv[k]||0}</span>${['pot','big','blue'].includes(k)?`<button class="btn" data-use="${k}" ${c.inv[k]?'':'disabled'}>使用</button>`:''}</div>`).join('')}
-    <div class="sect">設定</div><button class="btn wide" data-act="mute">${muted?'開啟音效':'關閉音效'}</button>`; }
+    <div class="sect">設定</div><button class="btn wide" data-act="mute">${muted?'開啟音效':'關閉音效'}</button>
+    <button class="btn wide ${hideOthers?'on':''}" data-act="hide" style="margin-top:6px">${hideOthers?'其他玩家：已隱藏（隊友仍顯示）':'隱藏其他玩家'}</button>
+    <button class="btn wide" data-act="zoom" style="margin-top:6px">畫面縮放：${Math.round(ZOOM*100)}%</button>`; }
   if(k==='social'){ const party=c.party;
     return `<div class="sect">PK 模式</div><button class="btn wide ${c.pk?'hot':''}" data-act="pk">${c.pk?'PK 模式開啟中（點這裡關閉）':'開啟 PK 模式'}</button><p class="ds">Lv.${PK_MIN_LV} 以上可用。村莊是安全區。殺死非紅名玩家會讓你變紅名。</p>
     <div class="sect">隊伍${party?`（${party.length}/8）`:''}</div>${party?party.map(m=>`<div class="row"><div class="info"><div class="nm">${esc(m.name)}${m.id===c.id?'（你）':''}</div><div class="ds">${CLS[m.cls].n} Lv.${m.lv}・HP ${Math.ceil(m.hp)}/${m.maxHP}・${MAPDEF[m.map]?.name||''}</div></div></div>`).join('')+`<button class="btn wide" data-act="pleave">離開隊伍</button>`:'<p class="ds">點地圖上的其他玩家可以邀請組隊。隊伍會平分經驗，人越多加成越多。</p>'}
@@ -469,6 +500,8 @@ $('#pBody').addEventListener('click',e=>{ const b=e.target.closest('button'); if
   if(D.act==='qtalk') return send({t:'qtalk'});
   if(D.act==='qpanel') return openPanel('quest');
   if(D.act==='goguard'){ closePanel(); if(cur.id!=='village') return send({t:'ret'}); const n=cur.npcs.find(n=>n.act==='guard'); if(n){ pendingAct={x:n.x,y:n.y,act:'guard'}; send({t:'move',x:n.x,y:n.y}); } return; }
+  if(D.act==='hide'){ hideOthers=!hideOthers; try{localStorage.setItem('sm_hide',hideOthers?'1':'0');}catch{} return openPanel('bag'); }
+  if(D.act==='zoom'){ $('#bZoom').onclick(); return openPanel('bag'); }
   if(D.act==='mute'){ muted=!muted; return openPanel('bag'); }
   if(D.act==='pk') return $('#bPk').onclick();
   if(D.act==='pleave') return send({t:'pleave'});
@@ -515,7 +548,7 @@ function hud(force,dt=0){ hudT-=dt; if(!force&&hudT>0) return; hudT=.15; if(!ME)
 /* ---------- main loop ---------- */
 let last=performance.now();
 function frame(t){ const dt=Math.min(.05,(t-last)/1000); last=t; now+=dt;
-  if(inGame&&cur&&P){ updateFx(dt); checkPending(); autoThink(dt); draw(); hud(false,dt); }
+  if(inGame&&cur&&P){ updateFx(dt); checkPending(); joyThink(dt); autoThink(dt); draw(); hud(false,dt); }
   requestAnimationFrame(frame); }
 resize();
 loadAssets().then(()=>{ connect(); requestAnimationFrame(frame); });
