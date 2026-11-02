@@ -160,7 +160,7 @@ function onEvent(e){
     if(m.boss){ doShake(10,.5); SFX.level(); } if(myTargetId===m.id) myTargetId=null; ents.delete(m.id); return; }
   if(k==='l'){ const p=ents.get(e[1]); if(p){ levelFx(p); } return; }
   if(k==='h'){ const p=ents.get(e[1]); if(p){ vfx('heal',fx(p),fy(p)+2,{s:.7,follow:p,foot:true}); if(e[2]) float(p,'+'+e[2],'#7fe08a'); else float(p,'完全回復','#7fe08a'); burst(fx(p),fy(p)-10,12,['#7fe08a','#c8ffd0'],70,{g:-70}); if(p===P) SFX.pot(); } return; }
-  if(k==='sl'){ const m=ents.get(e[1]); if(m){ burst(fx(m),fy(m),30,['#c9a060','#8a6a3a','#fff'],180); doShake(9,.4); SFX.slam(); } return; }
+  if(k==='sl'){ const m=ents.get(e[1]); if(m){ m.mAtk=.5; burst(fx(m),fy(m),30,['#c9a060','#8a6a3a','#fff'],180); doShake(9,.4); SFX.slam(); } return; }
   if(k==='tg'){ tgs.push({x:e[1],y:e[2],r:e[3],t:0,life:e[4],kind:e[5]}); if(P&&Math.hypot(P.x-e[1],P.y-e[2])<=e[3]+.3) SFX.warn(); return; }
   if(k==='tb'){ let bi=-1,bd=1e9; tgs.forEach((g,i)=>{const d=Math.abs(g.x-e[1])+Math.abs(g.y-e[2])+Math.abs(g.r-e[3])+(g.life-g.t);if(d<bd){bd=d;bi=i;}}); if(bi>=0) tgs.splice(bi,1);
     const X=PX(e[1]+.5,e[2]+.5),Y=PY(e[1]+.5,e[2]+.5),kind=e[4],cols=kind==='fire'?['#ffd84a','#ff7a2a','#c4301a']:kind==='bone'?['#f0ead8','#c8bea0','#fff']:kind==='root'?['#6a9a40','#3a5a20','#c8a040']:['#c9a060','#8a6a3a','#fff'];
