@@ -12,7 +12,7 @@ const today = ()=>new Date(Date.now()+8*3600e3).toISOString().slice(0,10); // Ta
 export class World {
   constructor(store){
     this.store = store; this.maps = {}; this.players = new Map(); this.byName = new Map();
-    this.nextId = 1; this.parties = new Map(); this.clans = new Map(); this.trades = new Map(); this.rankCache = null; this.rankT = 0;
+    this.nextId = 1; this.parties = new Map(); this.clans = new Map(); this.trades = new Map(); this.rankCache = null; this.rankT = 0; this.eclipse = {on:false,end:0,warned:false,forced:false}; this.evT = 0;
     for(const id of Object.keys(MAPDEF)) this.maps[id] = this.makeInstance(id);
   }
   async init(){ for(const c of await this.store.listClans()) this.clans.set(c.name,c); this.timer = setInterval(()=>this.tick(), TICK); }
@@ -35,6 +35,7 @@ export class World {
     let mapId = MAPDEF[c.map] ? c.map : 'village';
     this.enterMap(P, mapId, MAPDEF[c.map] ? {x:c.x,y:c.y} : null);
     this.sysTo(P, `歡迎來到銀月大陸，${P.name}。目前在線 ${this.players.size} 人。`);
+    if(this.eclipse.on) this.send(P,{t:'event',k:'eclipse',on:true,end:this.eclipse.end});
     if(c.mq<QUESTS.length) this.send(P,{t:'quest',story:QUESTS[c.mq].story,n:QUESTS[c.mq].n,silent:c.mq>0});
     if(c.clan){ const cl=this.clans.get(c.clan); if(cl&&cl.notice) this.sysTo(P,`【血盟公告】${cl.notice}`); this.clanBroadcast(c.clan,{t:'chat',ch:'clan',from:'系統',msg:`${P.name} 上線了。`}); }
     return P;
@@ -83,8 +84,18 @@ export class World {
       this.spawnMob(inst,L[Math.max(0,Math.min(L.length-1,Math.round(ctr+rnd(-1.3,1.3))))],x,y); return; } }
 
   // ---------- tick ----------
+  // ---------- 月蝕之夜: every Saturday 21:00–21:30 Taipei time ----------
+  eclipseCheck(){ const E=this.eclipse; if(E.forced) { if(Date.now()>E.end) this.setEclipse(false); return; }
+    const t=new Date(Date.now()+8*3600e3), sat=t.getUTCDay()===6, h=t.getUTCHours(), m=t.getUTCMinutes();
+    const inWin=sat&&h===21&&m<30;
+    if(sat&&h===20&&m>=55&&!E.warned){ E.warned=true; this.broadcast({t:'chat',ch:'sys',from:'系統',msg:'夜空開始泛紅……5 分鐘後「月蝕之夜」降臨，所有狩獵地怪物加倍、經驗 ×2！'}); }
+    if(inWin&&!E.on){ const end=new Date(t); end.setUTCMinutes(30,0,0); this.setEclipse(true,end.getTime()-8*3600e3); }
+    if(!inWin&&E.on) this.setEclipse(false); }
+  setEclipse(on,end,forced){ const E=this.eclipse; E.on=on; E.end=on?end:0; E.forced=!!(on&&forced); if(!on) E.warned=false;
+    this.broadcast({t:'event',k:'eclipse',on,end:E.end});
+    this.broadcast({t:'chat',ch:'sys',from:'系統',msg:on?'✦ 月蝕之夜降臨 ✦ 月痕碎片在發熱，怪物從四面八方湧出。30 分鐘內經驗 ×2、稀有掉寶提高！':'月蝕結束了，月光回到大地。'}); }
   tick(){
-    const dt=TICK/1000;
+    const dt=TICK/1000; this.evT-=dt; if(this.evT<=0){ this.evT=1; this.eclipseCheck(); }
     for(const inst of Object.values(this.maps)){
       const active = inst.players.size>0;
       for(const P of inst.players) this.updatePlayer(P,dt);
@@ -92,7 +103,7 @@ export class World {
         if(active){ this.updateMobs(inst,dt); this.updateTele(inst,dt); }
         this.updateLoot(inst);
         inst.spawnT-=dt; inst.bossT-=dt;
-        if(inst.spawnT<=0){ const want=Math.min(70,MOB_COUNT+inst.players.size*2); inst.spawnT=want>MOB_COUNT?1:2.5; let n=0; for(const m of inst.mobs.values()) if(!m.boss) n++; if(n<want) this.spawnRandom(inst);
+        if(inst.spawnT<=0){ const ec=this.eclipse.on, want=ec?Math.min(120,(MOB_COUNT+inst.players.size*2)*2):Math.min(70,MOB_COUNT+inst.players.size*2); inst.spawnT=ec?.25:want>MOB_COUNT?1:2.5; let n=0; for(const m of inst.mobs.values()) if(!m.boss) n++; if(n<want) this.spawnRandom(inst);
           if(inst.bossT<=0 && ![...inst.mobs.values()].some(m=>m.boss)){ this.spawnBoss(inst); if(active) this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'系統',msg:`遠方傳來低沉的咆哮……${MT[inst.def.boss].n}出現了。`}); } }
       }
       if(active) this.snapshot(inst);
@@ -224,7 +235,7 @@ export class World {
     if(m.boss){ inst.bossT=BOSS_RESPAWN; inst.tg=inst.tg.filter(g=>g.by!==m.id); }
     if(m.summon||!best) return;
     const group = best.party ? [...best.party.members].filter(o=>o.inst===inst&&o.dead<=0&&Math.hypot(o.x-m.x,o.y-m.y)<16) : [best];
-    const bonus = 1+.1*(group.length-1), totalExp=Math.round(t.exp*bonus), lvSum=group.reduce((a,o)=>a+o.c.lv,0);
+    const bonus = 1+.1*(group.length-1), totalExp=Math.round(t.exp*bonus*(this.eclipse.on?2:1)), lvSum=group.reduce((a,o)=>a+o.c.lv,0);
     const gold=ri(t.g[0],t.g[1]), share=Math.max(1,Math.floor(gold/group.length));
     for(const o of group){ const e=Math.max(1,Math.round(totalExp*o.c.lv/lvSum)); this.gainExp(o,e); o.c.gold+=share; o.c.kills=(o.c.kills||0)+1;
       o.c.lawful=Math.min(32767,(o.c.lawful||0)+Math.max(1,Math.round(t.lv/2))); if(m.boss) o.c.bossKills=(o.c.bossKills||0)+1;
@@ -240,8 +251,9 @@ export class World {
       const legP = m.k==='firelord'?.25:m.k==='colossus'?.12:.06; if(Math.random()<legP) drop({it:makeLegend(Math.random()<.7?'w':'n')});
       this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`${group.map(o=>o.name).join('、')} 擊倒了 ${t.n}！`}); }
     else{ if(Math.random()<.22) drop({k:'pot'}); if(Math.random()<.04+tier*.01) drop({k:'ws'}); if(Math.random()<.05+tier*.01) drop({k:'as'}); if(Math.random()<.06) drop({k:'blue'});
-      if(Math.random()<.07) drop({it:makeItem(randomSlot(),Math.random()<.7?tier:Math.max(0,tier-1))});
-      if(Math.random()<.0015*tier) drop({it:makeLegend(Math.random()<.7?'w':'n')}); }
+      const ec=this.eclipse.on;
+      if(Math.random()<(ec?.12:.07)){ const it=makeItem(randomSlot(),Math.random()<.7?tier:Math.max(0,tier-1)); if(ec&&(it.q|0)<2&&Math.random()<.25){ it.q=2; it.bon=Object.assign(it.bon||{},{str:1+tier,con:1+tier}); } drop({it}); }
+      if(Math.random()<.0015*tier*(ec?3:1)) drop({it:makeLegend(Math.random()<.7?'w':'n')}); }
   }
   // ---------- ground loot ----------
   dropLoot(inst,x,y,L,owners,by){ const now=Date.now()/1000, M=inst.m;
@@ -418,6 +430,7 @@ export class World {
       if(cmd==='lv'){ c.lv=Math.max(1,Math.min(60,arg|0)); c.pts=0; this.me(P); }
       if(cmd==='tp'&&MAPDEF[arg]){ const b=this.maps[arg].m.boss; this.enterMap(P,arg,arg2==='boss'&&b?{x:b.x+3,y:b.y+3}:null); }
       if(cmd==='drop'){ const q=arg|0; this.dropLoot(P.inst,P.x+1,P.y+1,q===3?{it:makeLegend('w')}:q?{it:Object.assign(makeItem('h',3),{q,bon:{str:2}})}:{k:'pot'},new Set([P.id]),P); }
+      if(cmd==='eclipse'){ if(arg==='off') this.setEclipse(false); else this.setEclipse(true,Date.now()+(+arg||30)*60e3,true); }
       if(cmd==='god'){ c.hp=P.stats.maxHP=99999; }
       return; }
     const now=Date.now(); if(now-P.chatT<700) return this.logTo(P,'說話太快了。'); P.chatT=now;

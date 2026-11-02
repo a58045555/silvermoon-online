@@ -62,5 +62,12 @@ for(const [map,k] of [['forest','treant'],['waste','colossus'],['cave','firelord
   let leg=0; for(let i=0;i<200;i++){ I.loot.clear(); const b=W.spawnMob(I,k,I.m.boss.x,I.m.boss.y); b.dmg.set(K.id,1); W.killMob(I,b); for(const L of I.loot.values()) if(L.q===3) leg++; }
   ok(leg>0,`${MT[k].n} can drop legendary (${leg}/200)`);
 }
+// 月蝕之夜
+{ const E=await mk('月蝕','knight',20); W.enterMap(E,'forest',{x:10,y:10}); clearF(); E.c.hp=E.stats.maxHP=999999;
+  W.setEclipse(true,Date.now()+60e3,true); ok(msgs('月蝕','event').some(m=>m.on),'eclipse start sent to players');
+  for(let i=0;i<300;i++){ F.spawnT=0; W.tick(); E.c.hp=999999; E.dead=0; }
+  const n=[...F.mobs.values()].filter(m=>!m.boss).length; ok(n>70,`eclipse doubles mobs (${n})`);
+  const e0=E.c.exp+E.c.lv*1e6; const m=W.spawnMob(F,'wolf',11,10); m.dmg.set(E.id,1); const lv0=E.c.lv,x0=E.c.exp; W.killMob(F,m); ok(E.c.lv>lv0||E.c.exp-x0===MT.wolf.exp*2,`eclipse doubles exp (+${E.c.exp-x0})`);
+  W.eclipse.end=Date.now()-1; W.eclipseCheck(); ok(!W.eclipse.on,'eclipse ends on time'); }
 ok(SKILLS.knight.length===3&&QUESTS.length>=10,'data tables present');
 console.log('done'); process.exit();

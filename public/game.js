@@ -495,6 +495,7 @@ function onMsg(m){
     case 'who': openPanel('who',m.list); return;
     case 'quest': if(!m.silent) setTimeout(()=>openPanel('story',{title:m.n,text:m.story}),600); return;
     case 'qdone': onQuestDone(m); return;
+    case 'event': eclipse=m.on?{end:m.end-Date.now()+performance.now()}:null; if(m.on){ banner={t:4,a:'✦ 月蝕之夜 ✦',b:'怪物加倍・經驗 ×2・稀有掉寶提高'}; SFX.legend(); doShake(6,.5); } return;
     case 'ench': SFX[m.ok?'ok':'boom'](); if(curPanel==='smith') openPanel('smith',{c:m.ok?'ok':'boom',t:m.msg}); addLog(m.msg); return;
   }
 }
@@ -630,7 +631,7 @@ function onMe(c){
 }
 
 /* ---------- telegraphs, ground loot, quest tracker ---------- */
-let tgs=[], gone=new Map(), trackRect=null, ICONIMG=null; const loot=new Map(), cdEnd=[0,0,0];
+let eclipse=null, tgs=[], gone=new Map(), trackRect=null, ICONIMG=null; const loot=new Map(), cdEnd=[0,0,0];
 function lootList(){ return loot.values(); }
 function canPickLoot(L){ return !L.own||!ME||L.own.includes(ME.id)||now>L.ownEnd; }
 function lootIcon(L){ return L.it?iconIdx(L.it,ME?.cls):(INVI[L.k]??63); }
@@ -643,6 +644,8 @@ function drawGroundFx(){
     if(ICONIMG&&ICONIMG.naturalWidth){ const i=lootIcon(L),sz=ICONS.sz; ctx.drawImage(ICONIMG,(i%ICONS.cols)*sz,Math.floor(i/ICONS.cols)*sz,sz,sz,Math.round(X-12),Math.round(Y-22-h+bob),24,24); }
     else { ctx.fillStyle='#e8d8b0'; ctx.fillRect(X-5,Y-12-h,10,10); } } }
 function drawPillars(){
+  if(eclipse){ const a=.16+.04*Math.sin(now*1.5); ctx.fillStyle=`rgba(120,0,40,${a})`; ctx.fillRect(0,0,VW,VH);
+    const mx=VW*.6,my=34; if(VW>300){ ctx.fillStyle='rgba(180,30,40,.85)'; ctx.beginPath(); ctx.arc(mx,my,18,0,7); ctx.fill(); ctx.fillStyle='rgba(20,0,10,.9)'; ctx.beginPath(); ctx.arc(mx+7,my-3,16,0,7); ctx.fill(); } }
   for(const g of tgs){ const X=PX(g.x+.5,g.y+.5)-cam.x,Y=PY(g.x+.5,g.y+.5)-cam.y,rx=g.r*HW*1.414,ry=g.r*HH*1.414,k=Math.min(1,g.t/g.life);
     if(X<-rx-20||X>VW+rx+20||Y<-ry-20||Y>VH+ry+20) continue; const col=g.kind==='fire'?'255,90,20':'225,40,30';
     ctx.fillStyle=`rgba(${col},${.1+k*.15})`; ctx.beginPath(); ctx.ellipse(X,Y,rx,ry,0,0,7); ctx.fill();
@@ -667,6 +670,7 @@ function drawTracker(){ if(!ME) return; const q=QUESTS[ME.mq],maxW=Math.min(220,
   if(q){ rows.push(['◆ '+q.n,'#e8c46a']); for(const l of wrapText(q.d+(q.type!=='talk'?`（${ME.mqp}/${q.n}）`:''),maxW)) rows.push([l,'#ece2c8']); }
   else rows.push(['◆ 主線完成','#e8c46a']);
   if(ME.daily){ const left=ME.daily.list.filter(x=>!x.done); rows.push([left.length?`每日 ${3-left.length}/3・${left[0].d}（${left[0].p}/${left[0].n}）`:'每日任務完成 ✓',left.length?'#9fc4e0':'#7fe08a']); }
+  if(eclipse){ const left=Math.max(0,(eclipse.end-performance.now())/1000); if(left<=0) eclipse=null; else rows.unshift([`✦ 月蝕之夜 ${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')}・經驗 ×2`,'#ff7a8a']); }
   const w=Math.min(maxW,Math.max(...rows.map(r=>ctx.measureText(r[0]).width)))+14,h=rows.length*15+8,x=6,y=30;
   ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(x,y,w,h); ctx.fillStyle='rgba(216,178,90,.7)'; ctx.fillRect(x,y,2,h);
   rows.forEach((r,i)=>{ ctx.fillStyle=r[1]; ctx.fillText(r[0],x+8,y+16+i*15); }); trackRect={x,y,w,h}; }
