@@ -141,14 +141,14 @@ function onEvent(e){
   const k=e[0];
   if(k==='a'){ const A=ents.get(e[1]),T=ents.get(e[2]); if(!A||!T) return; const kind=e[3];
     const near=P&&Math.hypot(A.x-P.x,A.y-P.y)<14;
-    if(A.isPlayer){ A.atkVis=.45; const sx=fx(A),sy=bodyY(A);
+    if(A.isPlayer){ { let D=kind.startsWith('skill')||kind==='pierce'?.36:Math.min(.45,(CLS[A.cls]?.spd||.6)*.92); if(A.bf&&A.bf.haste>now) D=Math.min(D,(CLS[A.cls]?.spd||.6)/1.6*.92); A.atkDur=D; A.atkVis=D; } const sx=fx(A),sy=bodyY(A);
       if(kind==='slash'||kind==='slashD'||kind==='skill_knight'||kind==='skill_darkelf'){ A.lunge=.15; { const ang=Math.atan2(bodyY(T)-bodyY(A),fx(T)-fx(A)),big=kind.startsWith('skill'); if(VFXI['slash-gold']) vfx(kind==='skill_knight'?'slash-frost':kind==='skill_darkelf'?'shadow':'slash-gold',(fx(A)+fx(T))/2,(bodyY(A)+bodyY(T))/2-4,{s:big?.75:.5,rot:ang+Math.PI/2,flip:Math.random()<.5}); else slash(A,T,kind==='skill_knight'?'#9fe0ff':kind==='skill_darkelf'?'#8a4cff':kind==='slashD'?'#d8b8ff':'#fff'); } if(near) (kind.startsWith('skill')?SFX.crit:SFX.swing)(); pendingHit(T,null); }
       else if(kind==='arrow'){ pendingHit(T,shoot({x:sx+A.dir*8,y:sy,tgt:T,kind:'arrow',spd:520})); if(near) SFX.arrow(); }
       else if(kind==='skill_ranger'){ for(let i=0;i<3;i++) pendingHit(T,shoot({x:sx+A.dir*8,y:sy,tgt:T,kind:'arrow',spd:560+i*60,col:'#b8ffb0'})); if(near) SFX.arrow(); }
       else if(kind==='bolt'){ pendingHit(T,shoot({x:sx+A.dir*9,y:sy-22,tgt:T,kind:'bolt',spd:360})); if(near) SFX.bolt(); }
       else if(kind==='pierce'){ pendingHit(T,shoot({x:sx+A.dir*8,y:sy,tgt:T,kind:'arrow',spd:950,col:'#ffd84a',glow:1})); if(near) SFX.crit(); }
       else if(kind==='skill_mage'){ pendingHit(T,shoot({x:sx+A.dir*9,y:sy-22,tgt:T,kind:'fire',spd:300,aoe:1})); if(near) SFX.fire(); }
-    } else { A.atkAnim=.25; A.lg=.18; A.lgA=Math.atan2(fy(T)-fy(A),fx(T)-fx(A));
+    } else { A.atkAnim=.25; A.lg=.18; A.mAtk=.5; A.lgA=Math.atan2(fy(T)-fy(A),fx(T)-fx(A));
       if(kind==='spore'||kind==='mfire') pendingHit(T,shoot({x:fx(A),y:bodyY(A),tgt:T,kind:kind==='mfire'?'mfire':'spore',spd:kind==='mfire'?230:180}));
       else { parts.push({back:fy(T)<fy(A)-2,type:'slash',x:(fx(A)+fx(T))/2,y:(bodyY(A)+bodyY(T))/2,ang:A.lgA,t:0,life:.18,c:'#ff6b5e',big:A.boss}); if(near) SFX.swing(); pendingHit(T,null); } }
     return; }
@@ -323,7 +323,7 @@ function updateFx(dt){
   // hits whose target vanished before the projectile landed
   banner.t-=dt; shake-=dt; if(shake<=0)shakeMag=0; hurtFlash-=dt;
   for(const e of ents.values()){ const sp=Math.min(1,dt*(e.isPlayer?11:8)); const mv=Math.abs(e.x-e.rx)+Math.abs(e.y-e.ry)>.05; e.rx+=(e.x-e.rx)*sp; e.ry+=(e.y-e.ry)*sp;
-    e.hurt-=dt; if(e.isPlayer){ e.atkVis-=dt; e.lunge-=dt; if(mv)e.walk+=dt; } else { e.kb=Math.max(0,(e.kb||0)-dt*6); e.atkAnim-=dt; e.lg-=dt; } }
+    e.hurt-=dt; if(e.isPlayer){ e.atkVis-=dt; e.lunge-=dt; if(mv)e.walk+=dt; } else { e.kb=Math.max(0,(e.kb||0)-dt*6); e.atkAnim-=dt; e.mAtk=(e.mAtk||0)-dt; e.lg-=dt; } }
   for(const c of cur.corpses)c.t+=dt; cur.corpses=cur.corpses.filter(c=>c.t<.6);
   if(cur.id==='forest'&&Math.random()<dt*2.5)part(cam.x+rnd(0,VW),cam.y-4,{vx:rnd(10,30),vy:rnd(20,40),g:0,c:pick(['#6a9a40','#8ab050','#c8a040']),life:4,s:3,type:'leaf'});
   if(cur.id==='cave'&&Math.random()<dt*10)part(cam.x+rnd(0,VW),cam.y+VH+4,{vx:rnd(-10,10),vy:rnd(-60,-25),g:0,c:pick(['#ff9a3c','#ffd84a','#ff5a2a']),life:3,s:2,type:'leaf'});
