@@ -284,7 +284,7 @@ export class World {
     const owners=new Set(group.map(o=>o.id)), tier=inst.def.tier;
     const drop=(L)=>this.dropLoot(inst,m.x,m.y,L,owners,best);
     if(m.boss){ drop({k:'ws'}); drop({k:'as'}); drop({k:'big',n:2});
-      drop({it:makeItem(Math.random()<.5?'w':randomSlot(),Math.min(4,tier+1))}); if(Math.random()<.4) drop({it:makeItem(randomSlot(),Math.min(4,tier+1))});
+      drop({it:makeItem(Math.random()<.5?'w':randomSlot(),Math.min(5,tier+1))}); if(Math.random()<.4) drop({it:makeItem(randomSlot(),Math.min(5,tier+1))});
       const legP = m.k==='firelord'?.12:m.k==='colossus'?.06:.03; if(Math.random()<legP) drop({it:makeLegend(Math.random()<.7?'w':'n')});
       this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`${group.map(o=>o.name).join('、')} 擊倒了 ${t.n}！`}); }
     else{ if(Math.random()<.15) drop({k:'pot'}); if(Math.random()<.02+tier*.008) drop({k:'ws'}); if(Math.random()<.025+tier*.008) drop({k:'as'}); if(Math.random()<.04) drop({k:'blue'});
@@ -336,6 +336,19 @@ export class World {
     if(m.k==='firelord'){ if(pct<.3&&!m.enr){ m.enr=true; this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'卡爾薩',msg:'「我也曾經守護過這片大地……現在，燒吧！」'}); this.ev(inst,'fx',m.id,'enrage'); }
       if(m.mechT<=0){ m.mechT=m.enr?rnd(4,5):rnd(6.5,8); const ps=[...inst.players].filter(P=>P.dead<=0&&dist(P,m)<=10);
         for(const P of ps) this.tele(inst,m,P.x,P.y,1.5,1.5,1.4,'fire'); for(let i=0;i<(m.enr?7:4);i++) this.tele(inst,m,m.x+ri(-5,5),m.y+ri(-5,5),1.5,1.2+Math.random()*.8,1.4,'fire'); m.tele=.6; return true; } }
+    if(m.k==='frostwitch'){ for(const th of [.6,.3]) if(pct<th&&!(m.sum||[]).includes(th)){ (m.sum=m.sum||[]).push(th);
+        this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'莉瑟拉',msg:'「雪原的狼群啊，替我撕碎這些闖入者！」'});
+        for(let i=0;i<4;i++){ const nx=m.x+ri(-3,3),ny=m.y+ri(-3,3); if(nx<0||ny<0||nx>=inst.m.W||ny>=inst.m.H||inst.m.blk[ny*inst.m.W+nx]||this.occupied(inst,nx,ny)) continue; const a=this.spawnMob(inst,'frostwolf',nx,ny); a.summon=true; a.tgt=T.id; } }
+      if(m.mechT<=0){ m.mechT=rnd(6,7.5); // ice lances: a cross of circles through each player
+        for(const P of inst.players) if(P.dead<=0&&dist(P,m)<=9){ this.tele(inst,m,P.x,P.y,1.2,1.4,1.4,'ice'); for(const [dx,dy] of [[2,0],[-2,0],[0,2],[0,-2]]) this.tele(inst,m,P.x+dx,P.y+dy,1,1.8,1.2,'ice'); }
+        m.tele=.6; return true; } }
+    if(m.k==='sage'){ if(pct<.4&&!m.enr){ m.enr=true; this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'歐瑞恩',msg:'「我讀遍了月之塔的每一本書……答案只有一個：讓月亮熄滅。」'}); this.ev(inst,'fx',m.id,'enrage'); }
+      for(const th of [.7,.35]) if(pct<th&&!(m.sum||[]).includes(th)){ (m.sum=m.sum||[]).push(th);
+        for(let i=0;i<4;i++){ const nx=m.x+ri(-3,3),ny=m.y+ri(-3,3); if(nx<0||ny<0||nx>=inst.m.W||ny>=inst.m.H||inst.m.blk[ny*inst.m.W+nx]||this.occupied(inst,nx,ny)) continue; const a=this.spawnMob(inst,pick(['specter','gargoyle']),nx,ny); a.summon=true; a.tgt=T.id; } }
+      if(m.mechT<=0){ m.mechT=m.enr?rnd(4.5,5.5):rnd(6.5,8); // moonfall: a ring around himself plus a circle on every player
+        const n=m.enr?10:8, r=3.2; for(let i=0;i<n;i++){ const a=i/n*Math.PI*2; this.tele(inst,m,Math.round(m.x+Math.cos(a)*r),Math.round(m.y+Math.sin(a)*r),1.2,1.5,1.5,'moon'); }
+        for(const P of inst.players) if(P.dead<=0&&dist(P,m)<=10) this.tele(inst,m,P.x,P.y,1.4,1.7,1.5,'moon');
+        m.tele=.7; return true; } }
     if(m.slamT<=0&&dist(m,T)<=4){ m.slamT=rnd(5.5,7.5); this.tele(inst,m,m.x,m.y,2.6,1.1,1.7,'slam'); this.ev(inst,'sl',m.id); m.tele=1.1; return true; }
     return false; }
   // ---------- 灰燼教團入侵晨霧村: once a day at a random time 19:00–23:00 Taipei ----------
