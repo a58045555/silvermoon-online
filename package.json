@@ -1,0 +1,18 @@
+{
+  "name": "silvermoon-online",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "銀月大陸 Online — 原創類天堂 MMORPG",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node tools/bots.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "ws": "^8.16.0"
+  }
+}

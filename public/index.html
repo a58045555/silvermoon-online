@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>銀月大陸 Online</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+<style>
+/* Layout: one-screen game. HUD strip, map canvas fills the middle, log, five thumb buttons. Deliberate single night theme. */
+:root{
+  --bg:#0d100e;--panel:#191e1a;--edge:#3b3427;--gold:#d8b25a;--parch:#ece2c8;--dim:#9b937f;
+  --hp:#c4433a;--mp:#3f74c8;--xp:#8cb84a;--danger:#e0533f;
+  --pix:"DotGothic16","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  color-scheme:dark;
+}
+html{height:100%;box-sizing:border-box}
+[hidden]{display:none!important}
+*,*::before,*::after{box-sizing:border-box}
+body{height:100%;margin:0;background:var(--bg);color:var(--parch);font-family:var(--pix);overflow:hidden;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#app{height:100%;max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:7px;padding-block:8px}
+.hud{display:grid;grid-template-columns:auto 1fr auto;gap:6px 10px;align-items:center;background:linear-gradient(#1f251f,#151a16);border:2px solid var(--edge);padding:7px 10px}
+.who{display:grid;gap:1px}
+.lv{font-size:15px;color:var(--gold);white-space:nowrap}
+.cls{font-size:10px;color:var(--dim);letter-spacing:.1em}
+.bars{display:grid;gap:4px;min-width:0}
+.bar{position:relative;height:12px;background:#080a08;border:1px solid #000;overflow:hidden}
+.bar>i{position:absolute;inset:0 auto 0 0;display:block;transition:width .15s}
+.bar>span{position:relative;display:block;font-size:10px;line-height:11px;text-align:center;color:#fff;text-shadow:0 1px 0 #000;font-variant-numeric:tabular-nums}
+#hpF{background:linear-gradient(#e0584d,var(--hp))}#mpF{background:linear-gradient(#5b8fe0,var(--mp))}#xpF{background:linear-gradient(#a6d65e,var(--xp))}
+.bar.xp{height:5px}
+.gold{font-size:12px;color:var(--gold);white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right}
+.gold b{font-weight:400;color:var(--parch);display:block;font-size:14px}
+#stage{position:relative;flex:1;min-height:0;border:2px solid var(--edge);background:#060806;overflow:hidden}
+#cv{display:block;touch-action:none}
+
+.acts{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.btn{font:inherit;color:var(--parch);background:linear-gradient(#2b3028,#1b1f19);border:2px solid var(--edge);padding:9px 2px;font-size:13px;cursor:pointer;line-height:1.2}
+.btn small{display:block;font-size:10px;color:var(--dim);margin-top:2px}
+.btn:active{transform:translateY(1px);border-color:var(--gold)}
+.btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.btn.hot{border-color:var(--danger);color:#ffd4cc;background:linear-gradient(#4a1d17,#2a110d)}
+.btn.on{border-color:var(--gold);color:#ffe7a3;background:linear-gradient(#4a3c18,#2a220d)}
+.btn:disabled{opacity:.4}
+#overlay{position:fixed;inset:0;background:rgba(4,6,4,.74);display:flex;align-items:center;justify-content:center;z-index:20;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.panel{width:100%;max-width:460px;max-height:100%;overflow:auto;background:var(--panel);border:3px double var(--gold);padding:14px}
+.panel header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.panel h2{margin:0;font-size:18px;font-weight:400;color:var(--gold);letter-spacing:.06em}
+.panel p{margin:0 0 10px;font-size:13px;line-height:1.7}
+.close{font:inherit;font-size:12px;background:none;border:1px solid var(--edge);color:var(--dim);padding:4px 10px;cursor:pointer}
+.row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px dashed var(--edge)}
+.row .info{flex:1;min-width:0}
+.nm{font-size:14px}.ds{font-size:11px;color:var(--dim);margin-top:2px}
+.row .btn{padding:7px 9px;font-size:12px;flex:none}
+.sect{font-size:11px;letter-spacing:.12em;color:var(--dim);margin:14px 0 4px}
+.gear{border:1px solid var(--edge);padding:10px;margin-bottom:8px;background:#131813}
+.gname{font-size:16px}.e4{color:#9fd8ff}.e7{color:#ffd86b;text-shadow:0 0 6px rgba(255,200,80,.5)}
+.t2{color:#8fd0ff}.t3{color:#c59bff}.t4{color:#ffb35c}
+.gstat{font-size:12px;color:var(--dim);margin:3px 0 6px}
+.rate{font-size:12px;margin-bottom:8px}.rate.risk{color:var(--danger)}
+.gear .btn{width:100%}
+#fx{text-align:center;font-size:20px;margin:6px 0;min-height:4px}
+#fx.ok{color:#ffd86b;animation:pop .6s}#fx.boom{color:var(--danger);animation:shake .5s}
+@keyframes pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.25)}100%{transform:none}}
+@keyframes shake{0%,100%{transform:none}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.classes{display:grid;gap:8px}
+.ccard{display:flex;gap:12px;align-items:center;border:2px solid var(--edge);background:#131813;padding:10px;cursor:pointer;font:inherit;color:inherit;text-align:left;width:100%}
+.ccard:hover,.ccard:focus-visible{border-color:var(--gold);outline:none}
+.ccard img{width:64px;height:64px;image-rendering:pixelated;flex:none;background:#0b0e0b}
+.ccard .nm{font-size:16px;color:var(--gold)}
+.eqgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.slot,.bcell{position:relative;aspect-ratio:1;border:1px solid var(--edge);background:#0f130f;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font:inherit;color:var(--dim);min-width:0}
+.slot.sel,.bcell.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.slot .lb{position:absolute;left:3px;top:2px;font-size:9px;color:var(--dim)}
+.slot .en,.bcell .en{position:absolute;right:3px;bottom:2px;font-size:10px;color:#ffe7a3;text-shadow:0 1px 0 #000}
+.bcell.q1{border-color:#4a7aa8}.bcell.q2{border-color:#c49a3a}
+.bgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.ic{width:32px;height:32px;image-rendering:pixelated;background-repeat:no-repeat;transform:scale(1.15)}
+.ict{font-size:11px;color:var(--parch)}
+.detail{border:1px solid var(--edge);background:#131813;padding:10px;margin:8px 0}
+.detail .acts2{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}.detail .acts2 .btn{flex:1;padding:8px 6px;font-size:12px}
+.stats{display:grid;grid-template-columns:1fr auto auto;gap:4px 8px;align-items:center;font-size:13px}
+.stats .v{font-variant-numeric:tabular-nums;color:var(--parch);text-align:right}
+.stats .btn{padding:3px 10px;font-size:13px}
+.derived{display:grid;grid-template-columns:repeat(2,1fr);gap:2px 12px;font-size:12px;color:var(--dim);margin-top:8px}
+.derived b{font-weight:400;color:var(--parch);float:right;font-variant-numeric:tabular-nums}
+.gsel{display:flex;gap:6px;flex:none}
+.gsel button{display:flex;flex-direction:column;align-items:center;gap:2px;border:2px solid var(--edge);background:#0b0e0b;padding:4px;cursor:pointer;font:inherit;color:var(--dim);font-size:11px}
+.gsel button:hover,.gsel button:focus-visible{border-color:var(--gold);color:var(--gold);outline:none}
+.gsel img{width:56px;height:56px;image-rendering:pixelated}
+.ccard2{display:flex;gap:10px;align-items:center;border:2px solid var(--edge);background:#131813;padding:10px}
+.ccard2 .nm{font-size:16px;color:var(--gold)}
+.badge{display:inline-block;min-width:16px;padding:0 4px;margin-left:4px;font-size:10px;line-height:16px;background:var(--danger);color:#fff;border-radius:8px}
+@media (prefers-reduced-motion:reduce){#fx.ok,#fx.boom{animation:none}.bar>i{transition:none}}
+
+#log{height:84px;overflow-y:auto;font-size:12px;line-height:16px;color:var(--dim);padding:2px 4px;background:#0a0d0b;border:1px solid var(--edge)}
+#log .l-log{color:var(--dim)}#log .l-sys{color:#e8c46a}#log .l-all{color:#ece2c8}#log .l-map{color:#cfd8c8}#log .l-party{color:#8fd8ff}#log .l-clan{color:#9fe09f}#log .l-w{color:#e0a0ff}
+#log b{font-weight:400}
+#fChat{display:flex;gap:4px}
+#fChat select,#fChat input{font:inherit;font-size:14px;background:#0f130f;color:var(--parch);border:1px solid var(--edge);padding:6px 6px;min-width:0}
+#fChat input{flex:1}
+#fChat button{flex:none;padding:6px 10px}
+.acts{grid-template-columns:repeat(4,1fr)}
+.acts .btn{padding:8px 2px}
+#online{font-size:10px;color:var(--dim);text-align:right}
+#screen{position:fixed;inset:0;z-index:30;background:radial-gradient(ellipse at 50% 20%,#1d2a1e 0%,var(--bg) 70%);overflow:auto;display:flex;justify-content:center;align-items:flex-start;
+  padding:max(24px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+.card{width:100%;max-width:420px;background:var(--panel);border:3px double var(--gold);padding:18px;margin-top:6vh}
+.card.wide{max-width:560px;margin-top:0}
+.card h1{margin:0 0 4px;font-size:26px;font-weight:400;color:var(--gold);letter-spacing:.08em}
+.card h1 small{font-size:13px;color:var(--dim);letter-spacing:.2em}
+.card label{display:block;font-size:12px;color:var(--dim);margin:12px 0 4px}
+.card input,.inl input{width:100%;font:inherit;font-size:16px;background:#0f130f;color:var(--parch);border:1px solid var(--edge);padding:9px 10px}
+.card input:focus,.inl input:focus,#fChat input:focus{outline:2px solid var(--gold);outline-offset:0}
+.card .err{color:var(--danger);font-size:13px;margin:10px 0 0}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.btn.ghost{background:none}
+.btn.wide{width:100%}
+.ccard2{display:flex;gap:12px;align-items:flex-start;border:2px solid var(--edge);background:#131813;padding:10px}
+.ccard2.sel{border-color:var(--gold)}
+.ccard2 .pv{width:64px;height:64px;image-rendering:pixelated;flex:none;background:#0b0e0b}
+.cinfo{min-width:0;flex:1}
+.cinfo .gsel{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.cinfo .gsel .btn{padding:7px 10px;font-size:12px}
+.cinfo form .btn[type=submit]{width:100%;margin-top:8px}
+.inl{display:flex;gap:6px;margin-top:8px}.inl input{font-size:14px;padding:7px 8px}.inl .btn{flex:none;padding:7px 12px;font-size:12px}
+.num{font-variant-numeric:tabular-nums}
+#status{position:fixed;left:50%;top:max(10px,env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:40;background:#2a1d10;border:1px solid var(--gold);color:var(--parch);font-size:13px;padding:6px 12px}
+#toast{position:fixed;left:50%;bottom:max(90px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:45;background:#3a1612;border:1px solid var(--danger);color:#ffd4cc;font-size:13px;padding:8px 14px;max-width:90vw}
+.hud{grid-template-columns:auto 1fr auto}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="hud">
+    <div class="who"><div class="lv" id="lv">Lv.1</div><div class="cls" id="clsName"></div></div>
+    <div class="bars">
+      <div class="bar"><i id="hpF"></i><span id="hpT"></span></div>
+      <div class="bar"><i id="mpF"></i><span id="mpT"></span></div>
+      <div class="bar xp"><i id="xpF"></i></div>
+    </div>
+    <div class="gold">金幣<b id="gold">0</b><div id="online"></div></div>
+  </div>
+  <div id="stage"><canvas id="cv"></canvas></div>
+  <div id="log" aria-live="polite"></div>
+  <form id="fChat"><select id="chatCh" aria-label="頻道"><option value="map">地圖</option><option value="all">全頻</option><option value="party">隊伍</option><option value="clan">血盟</option></select><input id="chatIn" maxlength="120" placeholder="說點什麼…（/名字 訊息 = 私訊）" autocomplete="off"><button class="btn">送出</button></form>
+  <div class="acts">
+    <button class="btn" id="bPot">藥水<small id="cPot">×0</small></button>
+    <button class="btn" id="bSkill"><span id="skN">技能</span><small id="skM"></small></button>
+    <button class="btn" id="bAuto">自動<small>狩獵</small></button>
+    <button class="btn" id="bRet">回村<small id="cRet">×0</small></button>
+    <button class="btn" id="bBag">角色<small>背包</small></button>
+    <button class="btn" id="bSocial">社交<small>隊伍・血盟</small></button>
+    <button class="btn" id="bPk">PK<small>模式</small></button>
+    <button class="btn" id="bHelp" onclick="document.getElementById('chatIn').focus()">聊天<small>輸入</small></button>
+  </div>
+</div>
+<div id="overlay" hidden><div class="panel"><header><h2 id="pTitle"></h2><button class="close" id="pClose">關閉</button></header><div id="pBody"></div></div></div>
+<div id="screen" hidden></div>
+<div id="status" hidden></div>
+<div id="toast" hidden></div>
+<script type="module" src="game.js"></script>
+</body>
+</html>
