@@ -27,6 +27,6 @@ for r,(a,d) in enumerate(rows):
 south=imgs[st['rotations']['south']]; bb=south.getbbox(); foot=bb[3]-1+(fh-south.height)//2
 sheet.save(f'{root}/public/assets/mob_{key}.png',optimize=True)
 mp=f'{root}/public/assets/manifest.json'; m=json.load(open(mp)); old=m['mobs'].get(key,{})
-m['mobs'][key]={'src':f'assets/mob_{key}.png','prev':old.get('prev',f'assets/mob_{key}_prev.png'),'fw':fw,'fh':fh,'foot':foot,'anims':layout}
+import time; m['mobs'][key]={'src':f'assets/mob_{key}.png?v={int(time.time())}','prev':old.get('prev',f'assets/mob_{key}_prev.png'),'fw':fw,'fh':fh,'foot':foot,'anims':layout}
 json.dump(m,open(mp,'w'),separators=(',',':'))
 print(key,fw,fh,'foot',foot,{a:sorted(dd) for a,dd in layout.items() if a!='idle'}, os.path.getsize(f'{root}/public/assets/mob_{key}.png')//1024,'KB')
