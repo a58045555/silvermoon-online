@@ -339,6 +339,7 @@ window.addEventListener('keydown',e=>{ if(!inGame||!P||e.target.tagName==='INPUT
   if('wasdWASD'.includes(e.key)&&e.key.length===1){ keysDown.add(e.key.toLowerCase()); updKeyJoy(); }
   if(e.key==='+'||e.key==='=') $('#bZoom').onclick();
   if(e.key==='Enter'){ e.preventDefault(); $('#chatIn').focus(); }
+  if(e.key===' '){ e.preventDefault(); attackNearest(); }
   if(e.key==='1') usePot(); if(e.key==='2'||e.key==='3'||e.key==='4') castSkill(+e.key-2); });
 window.addEventListener('keyup',e=>{ if(e.key&&keysDown.delete(e.key.toLowerCase())) updKeyJoy(); });
 window.addEventListener('blur',()=>{ keysDown.clear(); updKeyJoy(); });
@@ -364,7 +365,20 @@ function checkPending(){ if(!pendingAct||!P) return; const a=pendingAct, near=a.
   if(near&&Math.abs(P.rx-P.x)<.1&&Math.abs(P.ry-P.y)<.1){ pendingAct=null; if(a.act==='heal') send({t:'heal'}); else openPanel(a.act); } }
 function usePot(){ if(!ME) return; if(ME.inv.pot) send({t:'use',k:'pot'}); else if(ME.inv.big) send({t:'use',k:'big'}); else addLog('紅色藥水用完了，回村找莉娜買。'); }
 $('#bPot').onclick=()=>{audioOn();usePot();};
-function castSkill(i){ if(!ME) return; const sk=SKILLS[ME.cls][i]; if(ME.lv<sk.lv) return addLog(`${sk.n}：Lv.${sk.lv} 解鎖。${sk.d}`); if(cdEnd[i]>now) return; if(sk.tgt&&!myTarget()) return addLog(`${sk.n}要先點一隻怪物。`); send({t:'skill',i}); }
+// nearest mob to fight (keeps the current target if it is still alive)
+function nearestMob(maxD=30){ const t=myTarget(); if(t&&!t.isPlayer&&cur.mobs.includes(t)) return t;
+  let best=null,bd=maxD; for(const m of cur.mobs){ if(autoBlk.get(m.id)>now) continue; const d=Math.hypot(m.x-P.x,m.y-P.y)+(m.boss&&MT[m.k].lv>ME.lv?4:0); if(d<bd){bd=d;best=m;} } return best; }
+function attackNearest(){ if(!ME||!P||P.dead) return null; if(cur.id==='village'&&!cur.mobs.length){ addLog('村子裡沒有怪物，從村南傳送陣出去打怪。'); return null; }
+  const m=nearestMob(); if(!m){ addLog('附近沒有怪物。'); return null; }
+  if(myTargetId!==m.id){ myTargetId=m.id; send({t:'attack',id:m.id}); parts.push({type:'ring',x:fx(m),y:fy(m),t:0,life:.3,r:22,c:'255,90,70'}); } joyHold=0; return m; }
+let pendSkill=null;
+function skillRange(){ return CLS[ME.cls].range<=1?1:CLS[ME.cls].range; }
+function castSkill(i){ if(!ME) return; const sk=SKILLS[ME.cls][i]; if(ME.lv<sk.lv) return addLog(`${sk.n}：Lv.${sk.lv} 解鎖。${sk.d}`); if(cdEnd[i]>now) return;
+  if(sk.tgt){ let t=myTarget(); if(!t||t.isPlayer&&!ME.pk) t=attackNearest(); if(!t) return;
+    if(cheb(P,t)>skillRange()){ pendSkill={i,until:now+4}; return; } }
+  send({t:'skill',i}); }
+function pendSkillThink(){ if(!pendSkill) return; const t=myTarget(); if(!t||now>pendSkill.until){ pendSkill=null; return; } if(cheb(P,t)<=skillRange()){ send({t:'skill',i:pendSkill.i}); pendSkill=null; } }
+$('#bAtk').onclick=()=>{ audioOn(); attackNearest(); };
 for(let i=0;i<3;i++) $('#bS'+i).onclick=()=>{audioOn();castSkill(i);};
 $('#bChat').onclick=()=>{ document.body.classList.toggle('chatOpen'); if(document.body.classList.contains('chatOpen')) setTimeout(()=>$('#chatIn').focus(),50); };
 $('#bQuest').onclick=()=>{audioOn();openPanel('quest');};
@@ -552,7 +566,7 @@ function hud(force,dt=0){ hudT-=dt; if(!force&&hudT>0) return; hudT=.15; if(!ME)
 /* ---------- main loop ---------- */
 let last=performance.now();
 function frame(t){ const dt=Math.min(.05,(t-last)/1000); last=t; now+=dt;
-  if(inGame&&cur&&P){ updateFx(dt); checkPending(); joyThink(dt); autoThink(dt); draw(); hud(false,dt); }
+  if(inGame&&cur&&P){ updateFx(dt); checkPending(); joyThink(dt); pendSkillThink(); autoThink(dt); draw(); hud(false,dt); }
   requestAnimationFrame(frame); }
 resize();
 loadAssets().then(()=>{ connect(); requestAnimationFrame(frame); });

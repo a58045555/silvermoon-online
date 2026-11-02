@@ -39,11 +39,12 @@ body{height:100%;margin:0;background:var(--bg);color:var(--parch);font-family:va
 #cv{display:block;touch-action:none}
 
 .acts{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
-.skpad{position:absolute;right:8px;bottom:8px;display:grid;grid-template-columns:repeat(2,70px);gap:8px;z-index:3}
-.skpad .btn{height:70px;border-radius:50%;padding:0 4px;background:rgba(27,31,25,.8);font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.skpad{position:absolute;right:8px;bottom:8px;display:grid;grid-template-columns:repeat(3,64px);grid-template-areas:'. s2 pot' 's1 atk atk' 's0 atk atk';gap:7px;z-index:3}
+#bPot{grid-area:pot}#bS2{grid-area:s2}#bS1{grid-area:s1}#bS0{grid-area:s0}
+#bAtk{grid-area:atk;width:135px!important;height:135px!important;font-size:17px!important;border-color:#c49a3a!important;background:rgba(74,48,18,.82)!important}
+.skpad .btn{width:64px;height:64px;border-radius:50%;padding:0 4px;background:rgba(27,31,25,.8);font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
 .skpad .btn small{font-size:9px}
-#bS0{width:70px}
-.fbtn{position:absolute;right:8px;bottom:164px;z-index:3;padding:5px 8px;font-size:11px;background:rgba(27,31,25,.8)}
+.fbtn{position:absolute;right:8px;bottom:226px;z-index:3;padding:5px 8px;font-size:11px;background:rgba(27,31,25,.8)}
 #log{position:absolute;left:6px;bottom:6px;width:min(52%,440px);max-height:100px;overflow:hidden;pointer-events:none;z-index:2;font-size:12px;line-height:16px;padding:4px 6px;
   background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.5) 30%);text-shadow:0 1px 1px #000}
 #joy{display:none;position:absolute;left:14px;bottom:14px;width:128px;height:128px;border-radius:50%;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.22);z-index:3;touch-action:none}
@@ -51,7 +52,7 @@ body{height:100%;margin:0;background:var(--bg);color:var(--parch);font-family:va
 body.touch{padding-left:max(4px,env(safe-area-inset-left,0px));padding-right:max(4px,env(safe-area-inset-right,0px))}
 body.touch #app{gap:4px;padding-block:4px}
 body.touch #joy{display:block}
-body.touch #log{bottom:154px;width:64%;max-height:82px}
+body.touch #log{bottom:226px;width:64%;max-height:82px}
 body.touch #fChat{display:none}
 body.touch.chatOpen #fChat{display:flex}
 body:not(.touch) #bChat{display:none}
@@ -180,10 +181,11 @@ td{padding:5px 0;border-bottom:1px dashed var(--edge)}td:last-child{text-align:r
     <div id="log" aria-live="polite"></div>
     <div id="joy" aria-hidden="true"><div id="joyK"></div></div>
     <div class="skpad">
-      <button class="btn sk" id="bS2"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
       <button class="btn" id="bPot">藥水<small id="cPot">×0</small></button>
+      <button class="btn sk" id="bS2"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
       <button class="btn sk" id="bS1"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
       <button class="btn sk" id="bS0"><span class="sn">技能</span><small></small><i class="cdv"></i></button>
+      <button class="btn" id="bAtk">攻擊<small>最近的怪</small></button>
     </div>
     <button class="btn fbtn" id="bZoom" aria-label="畫面縮放">100%</button>
   </div>
