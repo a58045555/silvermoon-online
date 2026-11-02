@@ -357,7 +357,7 @@ function drawItem(it){const o=it.o;
   else if(it.t==1){const X=PX(o.x+.5,o.y+.5)-cam.x,Y=PY(o.x+.5,o.y+.5)-cam.y;ctx.fillStyle='rgba(0,0,0,.32)';ctx.beginPath();ctx.ellipse(X,Y,12,5,0,0,7);ctx.fill();
     const ni=npcImg(o.k),nd=NPCIMG[o.k];if(ni)ctx.drawImage(ni,Math.round(X-nd.w/2),Math.round(Y-nd.foot));else ctx.drawImage(npcSpr(o.k),Math.round(X-16),Math.round(Y-47-Math.abs(Math.sin(now*2+o.x))*1.2));label(o.name,X,Y-58);const b=(Math.sin(now*4)+1)*1.5;ctx.fillStyle='#e8c040';ctx.fillRect(X-2,Y-74-b,4,7);ctx.fillRect(X-2,Y-65-b,4,2);}
   else if(it.t==2)drawMob(o,Math.round(fx(o)-cam.x),Math.round(fy(o)-cam.y));
-  else if(it.t==5){const p=o,X=Math.round(PX(p.x+.5,p.y+.5)-cam.x),Y=Math.round(PY(p.x+.5,p.y+.5)-cam.y),g=aImg('gate'),a=ASSETS.gate,sc=.8,w=a.w*sc,h=a.h*sc;
+  else if(it.t==5){const p=o,X=Math.round(PX(p.x+.5,p.y+.5)-cam.x),Y=Math.round(PY(p.x+.5,p.y+.5)-cam.y),g=aImg('gate'),a=ASSETS.gate,sc=p.big?1.15:.8,w=a.w*sc,h=a.h*sc;
     ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(X,Y+4,w*.42,w*.2,0,0,7);ctx.fill();
     ctx.drawImage(g,Math.round(X-w/2),Math.round(Y-a.cy*sc+10),Math.round(w),Math.round(h));
     // living portal glow inside the arch
@@ -391,7 +391,7 @@ function draw(){const m=cur;OX=m.H*HW;const WWp=(m.W+m.H)*HW,WHp=(m.W+m.H)*HH;
   for(const p of parts)if(p.type=='slash'&&p.back&&!(p.delay>0))drawSlash(p,p.x-cam.x,p.y-cam.y,p.t/p.life);
   for(const it of A){for(const b of B){if(b.done)continue;const o=b.o;if((it.tx>=o.x+o.w||it.ty>=o.y+o.h)&&it.sx>b.l-24&&it.sx<b.r+24){drawObj(o);b.done=true;}}drawItem(it);}
   for(const b of B)if(!b.done)drawObj(b.o);
-  for(const p of m.portals)label(p.label,PX(p.x+.5,p.y+.5)-cam.x,PY(p.x+.5,p.y+.5)-cam.y-(aImg('gate')?112:18),'#d0bcf4');
+  for(const p of m.portals)label(p.label,PX(p.x+.5,p.y+.5)-cam.x,PY(p.x+.5,p.y+.5)-cam.y-(aImg('gate')?(p.big?160:112):18),'#d0bcf4');
   if(m.heal)label('治癒之泉',PX(m.heal.x+1,m.heal.y+1)-cam.x,PY(m.heal.x+1,m.heal.y+1)-cam.y-62,'#b8dcf4');
   for(const p of projs){const X=p.x-cam.x,Y=p.y-cam.y;ctx.save();ctx.translate(X,Y);ctx.rotate(p.ang||0);
     if(p.kind=='arrow'){ctx.fillStyle=O;ctx.fillRect(-11,-2,22,4);ctx.fillStyle='#c8b080';ctx.fillRect(-10,-1,18,2);ctx.fillStyle='#d8dee3';ctx.fillRect(7,-2,4,4);ctx.fillStyle=p.col||'#e4dccc';ctx.fillRect(-11,-3,4,2);ctx.fillRect(-11,1,4,2);}
