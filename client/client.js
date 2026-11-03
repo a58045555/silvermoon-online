@@ -34,7 +34,7 @@ window.addEventListener('resize',()=>requestAnimationFrame(paintIcons));
 function icon(idx,moon){ const x=(idx%ICONS.cols)*ICONS.sz,y=Math.floor(idx/ICONS.cols)*ICONS.sz; return `<span class="ic" style="background-position:-${x}px -${y}px${moon?';filter:hue-rotate(210deg) saturate(1.5) brightness(1.2) drop-shadow(0 0 3px #b9a0ff)':''}"></span>`; }
 function iconIdx(it,cls){ const t=Math.min(4,it.t); if(it.s==='w')return CLSI[cls||ME.cls]*5+t; const o={a:20,h:25,c:30,g:35,b:40,s:45}[it.s]; if(o!=null)return o+t; if(it.s==='n')return 50+[0,0,1,1,2][t]; if(it.s==='r')return 53+it.t; return 63; }
 const itIcon=(it,cls)=>icon(iconIdx(it,cls),it.t>=5&&it.s!=='r');
-function itemCls(it){ if(!it)return''; if(it.q===3)return'leg'; if(it.en>=7)return'e7'; if(it.q===2)return't4'; if(it.q===1)return't2'; return['','','','t3','t4'][it.t]||''; }
+function itemCls(it){ if(!it)return''; if(it.q===3)return'leg'; if(it.en>=7)return'e7'; if(it.q===2)return't4'; if(it.q===1)return't2'; return['','','','t3','t4','moon'][it.t]||''; }
 
 /* ---------- network ---------- */
 let ws=null, reconnectT=0, inGame=false;
@@ -150,7 +150,7 @@ function onEvent(e){
       else if(kind==='pierce'){ pendingHit(T,shoot({x:sx+A.dir*8,y:sy,tgt:T,kind:'arrow',spd:950,col:'#ffd84a',glow:1})); if(near) SFX.crit(); }
       else if(kind==='skill_mage'){ pendingHit(T,shoot({x:sx+A.dir*9,y:sy-22,tgt:T,kind:'fire',spd:300,aoe:1})); if(near) SFX.fire(); }
     } else { A.atkAnim=.25; A.lg=.18; A.mAtk=.5; A.lgA=Math.atan2(fy(T)-fy(A),fx(T)-fx(A));
-      if(kind==='spore'||kind==='mfire') pendingHit(T,shoot({x:fx(A),y:bodyY(A),tgt:T,kind:kind==='mfire'?'mfire':'spore',spd:kind==='mfire'?230:180}));
+      if(kind==='spore'||kind==='mfire'||kind==='spear'||kind==='ice'||kind==='ghost') pendingHit(T,shoot({x:fx(A),y:bodyY(A),tgt:T,kind,spd:kind==='spear'?420:kind==='spore'?180:240}));
       else { parts.push({back:fy(T)<fy(A)-2,type:'slash',x:(fx(A)+fx(T))/2,y:(bodyY(A)+bodyY(T))/2,ang:A.lgA,t:0,life:.18,c:'#ff6b5e',big:A.boss}); if(near) SFX.swing(); pendingHit(T,null); } }
     return; }
   if(k==='d'){ const T=ents.get(e[1]); if(!T) return; const h={dmg:e[2],flags:e[3],label:e[4]};
@@ -320,6 +320,7 @@ function updateFx(dt){
   for(const f of floats)f.t+=dt; floats=floats.filter(f=>f.t<1.1);
   for(const p of projs){ p.t+=dt; const tg=ents.get(p.tgt.id)||p.tgt; const tx=fx(tg),ty=bodyY(tg),dx=tx-p.x,dy=ty-p.y,d=Math.hypot(dx,dy); p.ang=Math.atan2(dy,dx);
     if(p.kind==='fire'&&Math.random()<.8)part(p.x,p.y,{vx:rnd(-20,20),vy:rnd(-30,10),g:0,c:pick(['#ffd84a','#ff7a2a','#c4301a']),life:.35,s:pick([3,4])});
+    if((p.kind==='ice'||p.kind==='ghost')&&Math.random()<.6)part(p.x,p.y,{vx:rnd(-12,12),vy:rnd(-12,12),g:0,c:p.kind==='ice'?pick(['#e8f8ff','#9fd8ff']):pick(['#c8ffd8','#7ae0a0']),life:.3,s:2});
     if(p.kind==='bolt'&&Math.random()<.6)part(p.x,p.y,{vx:rnd(-15,15),vy:rnd(-15,15),g:0,c:pick(['#bfe8ff','#7ab8ff']),life:.25,s:2});
     if(d<10||p.t>2){ p.done=true; const q=pendingProjFor.get(p.tgt.id); if(q){const i=q.indexOf(p);if(i>=0)q.splice(i,1);}
       if(p.aoe){ vfx('explosion',tx,ty-6,{s:.9}); freeze(.05); burst(tx,ty,26,['#ffd84a','#ff7a2a','#c4301a','#fff2b0'],220); doShake(6,.22); parts.push({type:'ring',x:tx,y:ty,t:0,life:.35,r:TS*1.7,c:'255,150,60'}); }

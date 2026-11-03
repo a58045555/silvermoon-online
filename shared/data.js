@@ -209,7 +209,7 @@ export function calcStats(c){ const C=CLS[c.cls], G=gearSum(c.eq), sp=c.sp||{};
   return s; }
 export const expNeed = l=>Math.round(25*Math.pow(l,1.65));
 export function enchRate(kind,en){ const safe=kind==='w'?6:4; if(en<safe)return 1; return [.5,.4,.3,.22,.15,.1][en-safe]??.05; }
-export const sellP = it=>Math.round([25,120,450,1300,3200][it.t|0]*(it.s==='w'?1.2:it.s==='a'?1:it.s==='r'||it.s==='n'?1.4:.7)*(1+(it.q|0)*.8)+(it.en|0)*(it.en|0)*40);
+export const sellP = it=>Math.round(([25,120,450,1300,3200,7000][it.t|0]||25)*(it.s==='w'?1.2:it.s==='a'?1:it.s==='r'||it.s==='n'?1.4:.7)*(1+(it.q|0)*.8)+(it.en|0)*(it.en|0)*40);
 export const shopPrice = (sl,t)=>Math.round([0,600,2400,7000,16000][t]*(sl==='w'?1:sl==='a'?.8:.45));
 export const SHOP_GEAR = [['w',1],['a',1],['h',1],['g',1],['b',1],['c',1],['s',1],['w',2],['a',2]];
 export function itemBaseName(it,cls){ if(!it)return'（無）'; if(it.leg)return it.s==='w'?(LEGEND_W[cls]||LEGEND_W.knight):it.leg; if(it.s==='w')return(WN[cls]||WN.knight)[it.t]; if(it.s==='r')return(RINGS[it.t]||RINGS[0]).n; return ARM[it.s]?ARM[it.s].n[it.t]:'?'; }

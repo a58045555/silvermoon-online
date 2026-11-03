@@ -9,6 +9,7 @@ const rnd = (a,b)=>a+Math.random()*(b-a), ri = (a,b)=>Math.floor(rnd(a,b+1)), pi
 const MOB_COUNT = 26, BOSS_RESPAWN = 600, AUTOSAVE = 30, LOOT_OWN = 20, LOOT_LIFE = 60;
 const today = ()=>new Date(Date.now()+8*3600e3).toISOString().slice(0,10); // Taipei day
 
+const MSHOT={cultist:'mfire',ashpriest:'mfire',barbarian:'spear',icewraith:'ice',specter:'ghost'};
 export class World {
   constructor(store){
     this.store = store; this.maps = {}; this.players = new Map(); this.byName = new Map();
@@ -481,7 +482,7 @@ export class World {
       if(!T){ let bd=1e9; const sight=m.boss?8:(t.sight||6); for(const P of inst.players){ if(P.dead>0) continue; const d=cheb(m,P); if(d<=sight&&d<bd){bd=d;T=P;} } if(T) m.tgt=T.id; }
       if(m.boss&&T&&this.bossAI(inst,m,T,dt)) continue;
       if(T){ const d=cheb(m,T);
-        if(t.ranged&&d<=t.ranged&&d>1){ if(m.cd<=0){ m.cd=1.6; this.face(m,T.x-m.x,T.y-m.y); this.ev(inst,'a',m.id,T.id,m.k==='cultist'?'mfire':'spore'); this.mobHit(m,T); } }
+        if(t.ranged&&d<=t.ranged&&d>1){ if(m.cd<=0){ m.cd=1.6; this.face(m,T.x-m.x,T.y-m.y); this.ev(inst,'a',m.id,T.id,MSHOT[m.k]||'spore'); this.mobHit(m,T); } }
         else if(d<=1){ this.face(m,T.x-m.x,T.y-m.y); if(m.cd<=0){ m.cd=(m.boss?1.4:1.15)*(m.enr?.7:1); this.ev(inst,'a',m.id,T.id,'claw'); this.mobHit(m,T); } }
         else if(m.cd<=0){ m.cd=t.spd; this.stepToward(inst,m,T.x,T.y); }
       } else if(m.goal&&m.cd<=0){ m.cd=t.spd; this.stepToward(inst,m,m.goal.x,m.goal.y); }
@@ -539,7 +540,7 @@ export class World {
         const dest=this.maps[T.map],M=dest.m; let pos=null;
         if(T.boss){ for(let r=4;r<=7&&!pos;r++) for(let a=0;a<16&&!pos;a++){ const x=Math.round(M.boss.x+Math.cos(a/16*6.283)*r),y=Math.round(M.boss.y+Math.sin(a/16*6.283)*r); if(x>1&&y>1&&x<M.W-2&&y<M.H-2&&!M.blk[y*M.W+x]) pos={x,y}; } }
         c.gold-=T.p; this.me(P); this.logTo(P,`傳送師露娜：「祝你一路平安。」（-${T.p} 金幣）`);
-        this.enterMap(P,T.map,pos,pos?null:'village'); return; }
+        this.enterMap(P,T.map,pos,pos?null:(MAPDEF[T.map].prev||'village')); return; }
       case 'sellall': { if(!town) return this.logTo(P,'要在村莊才能賣東西。'); const maxQ=Math.max(0,Math.min(2,msg.q|0)); let n=0,g=0;
         c.bag=c.bag.filter(it=>{ if(it.lock||it.leg||(it.q|0)>maxQ) return true; n++; g+=sellP(it); return false; });
         c.gold+=g; this.me(P); return this.logTo(P,n?`一鍵販賣：賣掉 ${n} 件，獲得 ${g.toLocaleString()} 金幣。`:'沒有可以賣的東西（鎖定、傳說和更高稀有度的不會賣）。'); }
