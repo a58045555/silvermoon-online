@@ -1,5 +1,5 @@
 // Authoritative game world: one shared instance per map, ticking at 10 Hz.
-import { MENTOR, ADVQ_NEED, ADVQ_RATE, BOUNTY_DAY_MAX, makeBounty, ACH, achValue, ADV, ADV_LV, ADV_COST, TELE, skillsOf, SKILLS, QUESTS, dailyFor, makeLegend, LEGEND_W, RARN, itemBaseName } from '../shared/data.js';
+import { DG_FLOORS, DG_DAILY, DG_LIMIT, DG_MINLV, DGN, dgTheme, dgId, MENTOR, ADVQ_NEED, ADVQ_RATE, BOUNTY_DAY_MAX, makeBounty, ACH, achValue, ADV, ADV_LV, ADV_COST, TELE, skillsOf, SKILLS, QUESTS, dailyFor, makeLegend, LEGEND_W, RARN, itemBaseName } from '../shared/data.js';
 import { CLS, MT, MAPDEF, SHOP, INV_N, BAGMAX, PK_MIN_LV, CLAN_COST, CLAN_MIN_LV, DIRS, NOSHIELD, SHOP_GEAR,
   buildMap, arrivalPoint, inSafeZone, findPath, calcStats, expNeed, enchRate, sellP, shopPrice, makeItem, randomSlot,
   itemName, eqSlotFor, itemScore, cheb, dist, NAME_RE } from '../shared/data.js';
@@ -14,7 +14,7 @@ export class World {
   constructor(store){
     this.store = store; this.maps = {}; this.players = new Map(); this.byName = new Map();
     this.nextId = 1; this.parties = new Map(); this.clans = new Map(); this.trades = new Map(); this.rankCache = null; this.rankT = 0; this.eclipse = {on:false,end:0,warned:false,forced:false}; this.inv = null; this.invDay=''; this.wb = null; this.wbWeek=''; this.evT = 0;
-    for(const id of Object.keys(MAPDEF)) this.maps[id] = this.makeInstance(id);
+    for(const id of Object.keys(MAPDEF)) this.maps[id] = this.makeInstance(id); this.runs=new Map(); this.runSeq=1;
   }
   async init(){ for(const c of await this.store.listClans()) this.clans.set(c.name,c); this.timer = setInterval(()=>this.tick(), TICK);
     if(+process.env.INVADE_IN>0) setTimeout(()=>this.startInvasion(Date.now()+10*60e3),process.env.INVADE_IN*60e3);
@@ -70,6 +70,7 @@ export class World {
   // ---------- maps ----------
   enterMap(P,mapId,pos,from){
     if(P.inst) P.inst.players.delete(P);
+    if(P.run&&!mapId.startsWith('dg_')){ P.run=null; this.send(P,{t:'dg',on:false}); }
     const inst=this.maps[mapId]; P.inst=inst; inst.players.add(P);
     const p = pos || (from ? arrivalPoint(inst.m,from) : inst.m.spawn);
     P.x=p.x; P.y=p.y; P.path=[]; P.target=null; P.moveAcc=0;
@@ -87,7 +88,8 @@ export class World {
       let near=false; for(const P of inst.players) if(Math.hypot(P.x-x,P.y-y)<7){near=true;break;} if(near) continue;
       const dd=Math.hypot(x-M.entry.x,y-M.entry.y); if(dd<6) continue; if(Math.hypot(x-M.boss.x,y-M.boss.y)<4) continue;
       const f=dd/Math.hypot(M.W,M.H),ctr=Math.min(1,f*1.6)*(L.length-1);
-      this.spawnMob(inst,L[Math.max(0,Math.min(L.length-1,Math.round(ctr+rnd(-1.3,1.3))))],x,y); return; } }
+      const mm=this.spawnMob(inst,L[Math.max(0,Math.min(L.length-1,Math.round(ctr+rnd(-1.3,1.3))))],x,y);
+      if(Math.random()<.035) this.makeElite(mm); else if(Math.random()<.006) this.makeGoblin(inst,mm,inst.def.tier); return; } }
 
   // ---------- tick ----------
   // ---------- 月蝕之夜: every Saturday 21:00–21:30 Taipei time ----------
@@ -105,6 +107,8 @@ export class World {
     for(const inst of Object.values(this.maps)){
       const active = inst.players.size>0;
       for(const P of inst.players) this.updatePlayer(P,dt);
+      if(inst.dg){ if(!active){ delete this.maps[inst.id]; if(inst.dg.inst===inst) this.runs.delete(inst.dg.rid); continue; }
+        this.updateMobs(inst,dt); this.updateTele(inst,dt); this.updateLoot(inst); this.dgTick(inst,dt); }
       if(inst.id==='village'&&this.inv){ this.updateMobs(inst,dt); this.updateTele(inst,dt); this.invasionTick(inst,dt); }
       if(inst.def.mobs){
         if(active){ this.updateMobs(inst,dt); this.updateTele(inst,dt); }
@@ -128,7 +132,7 @@ export class World {
     party: P.party?[...P.party.members].map(m=>({id:m.id,name:m.name,lv:m.c.lv,cls:m.c.cls,hp:m.c.hp,maxHP:m.stats.maxHP,map:m.inst?.id})):null,
     partyLeader: P.party?P.party.leader===P:false, skCd:Math.max(0,P.skCd), dead:P.dead>0,
     adv:c.adv||null, cds:skillsOf(c).map(k=>Math.max(0,+(P.cds[k.id]||0).toFixed(1))), buff:{iron:Math.max(0,P.buff.iron|0),haste:Math.max(0,P.buff.haste|0),shadow:Math.max(0,P.buff.shadow|0),rage:Math.max(0,P.buff.rage|0)},
-    mq:c.mq, mqp:c.mqp, daily:c.daily, advq:c.advq||null, bounty:c.bounty||null, ach:c.ach||{}, title:c.title||null, mk:c.mk||{}, bk:c.bk||{}, kills:c.kills|0, maxEn:c.maxEn|0, legGot:c.legGot|0, invWon:c.invWon|0, wbKills:c.wbKills|0, bountyDone:c.bountyDone|0 }; }
+    mq:c.mq, mqp:c.mqp, daily:c.daily, advq:c.advq||null, dg:c.dg||null, dgBest:c.dgBest||{}, dgClears:c.dgClears|0, dgFast:c.dgFast|0, bounty:c.bounty||null, ach:c.ach||{}, title:c.title||null, mk:c.mk||{}, bk:c.bk||{}, kills:c.kills|0, maxEn:c.maxEn|0, legGot:c.legGot|0, invWon:c.invWon|0, wbKills:c.wbKills|0, bountyDone:c.bountyDone|0 }; }
   snapshot(inst){
     const p=[],m=[];
     for(const P of inst.players) p.push([P.id,P.name,P.c.cls,P.c.g,P.x,P.y,Math.round(P.c.hp/P.stats.maxHP*100),P.c.lv,(P.c.lawful<0?1:0)|(P.purple>0?2:0)|(P.dead>0?4:0)|(P.pk?8:0),P.c.clan||'',P.face,P.c.eq.w.en|0,P.c.title||'']);
@@ -143,7 +147,7 @@ export class World {
   updatePlayer(P,dt){
     const c=P.c,inst=P.inst; P.atkCd-=dt; P.skCd-=dt; P.purple=Math.max(0,P.purple-dt);
     for(const k in P.cds) P.cds[k]-=dt; const B=P.buff; for(const k of ['iron','haste','shadow','rage']) if(B[k]>0){ B[k]-=dt; if(B[k]<=0){ B[k]=0; if(k==='shadow') B.nc=false; this.me(P); } }
-    if(P.dead>0){ P.dead-=dt; if(P.dead<=0){ c.hp=P.stats.maxHP; c.mp=P.stats.maxMP; this.enterMap(P,'village',{x:15,y:14}); } return; }
+    if(P.dead>0){ P.dead-=dt; if(P.dead<=0){ c.hp=P.stats.maxHP; c.mp=P.stats.maxMP; if(inst.dg&&this.maps[inst.id]){ c.hp=Math.ceil(P.stats.maxHP*.6); this.enterMap(P,inst.id,{x:inst.m.entry.x,y:inst.m.entry.y}); this.logTo(P,'你在入口重新站了起來。'); } else this.enterMap(P,'village',{x:15,y:14}); } return; }
     // regen every second
     P.regT=(P.regT||0)+dt; if(P.regT>=1){ P.regT=0; const town=inst.id==='village';
       if(Date.now()/1000-P.lastHit>5) c.hp=Math.min(P.stats.maxHP,c.hp+(town?Math.ceil(P.stats.maxHP*.06):1+c.lv*.15+(P.stats.con-10)*.1));
@@ -163,7 +167,7 @@ export class World {
       while(P.path.length){ const [nx,ny]=P.path[0],diag=nx!==P.x&&ny!==P.y,need=diag?.17:.15; if(P.moveAcc<need) break;
         if(inst.m.blk[ny*inst.m.W+nx]||this.occupied(inst,nx,ny)||Math.max(Math.abs(nx-P.x),Math.abs(ny-P.y))!==1){ P.path=[]; break; }
         P.moveAcc-=need; P.path.shift(); this.face(P,nx-P.x,ny-P.y); P.x=nx; P.y=ny; this.pickAt(P);
-        const pt=inst.m.portals.find(o=>o.x===P.x&&o.y===P.y); if(pt){ P.jdir=null; this.enterMap(P,pt.to,null,inst.id); return; }
+        const pt=inst.m.portals.find(o=>o.x===P.x&&o.y===P.y); if(pt&&!(pt.lock&&!(inst.dg&&inst.dg.open))){ P.jdir=null; if(pt.to==='next') return this.dgNext(inst.dg); if(inst.dg){ this.enterMap(P,'village',{x:15,y:19}); return; } this.enterMap(P,pt.to,null,inst.id); return; }
         if(!P.path.length&&P.jdir){ const st=this.dirStep(P); if(st) P.path=[st]; } }
       if(!P.path.length) P.moveAcc=0;
     } else P.moveAcc=0;
@@ -269,10 +273,12 @@ export class World {
     if(m.boss){ inst.bossT=BOSS_RESPAWN; inst.tg=inst.tg.filter(g=>g.by!==m.id); }
     if(m.inv) this.invasionKill(inst,m);
     if(m.wb) return this.worldBossKill(inst,m);
+    if(inst.dg) this.dgKill(inst,m,best);
+    if(m.flee&&best) return this.goblinLoot(inst,m,best);
     if(m.summon||!best) return;
     const group = best.party ? [...best.party.members].filter(o=>o.inst===inst&&o.dead<=0&&Math.hypot(o.x-m.x,o.y-m.y)<16) : [best];
-    const bonus = 1+.1*(group.length-1), totalExp=Math.round(t.exp*bonus*(this.eclipse.on?2:1)), lvSum=group.reduce((a,o)=>a+o.c.lv,0);
-    const gold=ri(t.g[0],t.g[1]), share=Math.max(1,Math.floor(gold/group.length));
+    const bonus = (1+.1*(group.length-1))*(m.elite?3:1), totalExp=Math.round(t.exp*bonus*(this.eclipse.on?2:1)), lvSum=group.reduce((a,o)=>a+o.c.lv,0);
+    const gold=ri(t.g[0],t.g[1])*(m.elite?3:1), share=Math.max(1,Math.floor(gold/group.length));
     for(const o of group){ const e=Math.max(1,Math.round(totalExp*o.c.lv/lvSum)); this.gainExp(o,e); o.c.gold+=share; o.c.kills=(o.c.kills||0)+1;
       o.c.lawful=Math.min(32767,(o.c.lawful||0)+Math.max(1,Math.round(t.lv/2))); if(m.boss) o.c.bossKills=(o.c.bossKills||0)+1;
       this.logTo(o,`打倒${t.n}，經驗 +${e}、金幣 +${share}`); this.me(o);
@@ -288,7 +294,8 @@ export class World {
       drop({it:makeItem(Math.random()<.5?'w':randomSlot(),Math.min(5,tier+1))}); if(Math.random()<.4) drop({it:makeItem(randomSlot(),Math.min(5,tier+1))});
       const legP = m.k==='firelord'?.12:m.k==='colossus'?.06:.03; if(Math.random()<legP) drop({it:makeLegend(Math.random()<.7?'w':'n')});
       this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`${group.map(o=>o.name).join('、')} 擊倒了 ${t.n}！`}); }
-    else{ if(Math.random()<.15) drop({k:'pot'}); if(Math.random()<.02+tier*.008) drop({k:'ws'}); if(Math.random()<.025+tier*.008) drop({k:'as'}); if(Math.random()<.04) drop({k:'blue'});
+    else{ if(m.elite){ drop({it:(()=>{ const it=makeItem(randomSlot(),tier); if(!(it.q|0)){ it.q=1; it.bon={[pick(['str','dex','con','int','wis'])]:1+(tier>>1)}; } return it; })()}); if(Math.random()<.35) drop({k:Math.random()<.5?'ws':'as'}); }
+      if(Math.random()<.15) drop({k:'pot'}); if(Math.random()<.02+tier*.008) drop({k:'ws'}); if(Math.random()<.025+tier*.008) drop({k:'as'}); if(Math.random()<.04) drop({k:'blue'});
       const ec=this.eclipse.on;
       if(Math.random()<(ec?.08:.04)){ const it=makeItem(randomSlot(),Math.random()<.7?tier:Math.max(0,tier-1)); if(ec&&(it.q|0)<2&&Math.random()<.25){ it.q=2; it.bon=Object.assign(it.bon||{},{str:1+tier,con:1+tier}); } drop({it}); }
       if(Math.random()<.0005*tier*(ec?3:1)) drop({it:makeLegend(Math.random()<.7?'w':'n')}); }
@@ -420,6 +427,77 @@ export class World {
     this.broadcast({t:'event',k:'wb',on:false});
     this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`卡爾薩殘火熄滅了！血盟傷害排名：${topClans.slice(0,3).map(([k,d],i)=>`${i+1}. ${k}（${Math.round(d/tot*100)}%）`).join('　')}${top?`。「${top}」成員額外獲得武器強化卷軸 ×2！`:''}`}); }
 
+  // ---------- elites, treasure goblins ----------
+  makeElite(m,mul=4){ const t=MT[m.k]; m.elite=true; m.hp=m.maxhp=Math.round(t.hp*mul); m.atkMul=1.35; m.nm=t.n; m.slamT=rnd(2,4); return m; }
+  makeGoblin(inst,m,tier){ m.k='goblin'; m.flee=true; m.fleeT=25; m.hp=m.maxhp=Math.round(60+tier*tier*220); m.nm='✦寶藏哥布林'; m.tier=tier;
+    this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'系統',msg:'叮叮噹噹……一隻背著大袋子的寶藏哥布林出現了！快在牠逃走前抓住牠！'}); return m; }
+  eliteAI(inst,m,T,dt){ if(m.tele>0){ m.tele-=dt; return true; } m.slamT-=dt;
+    if(m.slamT<=0&&cheb(m,T)<=2){ m.slamT=rnd(5,7.5); this.tele(inst,m,m.x,m.y,1.8,1.15,1.6,'slam'); this.ev(inst,'sl',m.id); m.tele=1.15; return true; } return false; }
+  goblinAI(inst,m,dt){ m.fleeT-=dt; if(m.fleeT<=0){ inst.mobs.delete(m.id); this.ev(inst,'k',m.id); this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'系統',msg:'寶藏哥布林鑽進地洞跑掉了……'}); return true; }
+    if(m.cd>0) return true; m.cd=.42; let near=null,bd=1e9; for(const P of inst.players){ const d=dist(P,m); if(P.dead<=0&&d<bd){bd=d;near=P;} }
+    if(near&&bd<8){ const M=inst.m; let best=null,bs=-1; for(const [dx,dy] of DIRS){ const nx=m.x+dx,ny=m.y+dy; if(nx<0||ny<0||nx>=M.W||ny>=M.H||M.blk[ny*M.W+nx]||this.occupied(inst,nx,ny,m)) continue; const sc=Math.hypot(nx-near.x,ny-near.y)+Math.random()*.6; if(sc>bs){bs=sc;best=[nx,ny];} }
+      if(best){ this.face(m,best[0]-m.x,best[1]-m.y); m.x=best[0]; m.y=best[1]; } }
+    return true; }
+  goblinLoot(inst,m,best){ const tier=m.tier||1, owners=new Set([best.id]), drop=L=>this.dropLoot(inst,m.x,m.y,L,owners,best);
+    for(let i=0;i<4;i++) drop({k:'pot',n:2}); best.c.gold+=Math.round((800+tier*tier*900)*rnd(.8,1.2)); drop({k:'ws'}); drop({k:'as'}); if(Math.random()<.5) drop({k:Math.random()<.5?'ws':'as'});
+    const it=makeItem(randomSlot(),Math.min(5,tier)); it.q=Math.max(it.q|0,Math.random()<.35?2:1); it.bon=it.bon||{str:1,con:1}; drop({it}); if(Math.random()<.04) drop({it:makeLegend(Math.random()<.7?'w':'n')});
+    this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'系統',msg:`${best.name} 抓到了寶藏哥布林！金幣和寶物撒了一地！`}); this.me(best); }
+  // ---------- 公會試煉 (dungeon runs) ----------
+  dgStart(P){ const c=P.c; if(P.inst.id!=='village') return this.logTo(P,'要在晨霧村找米亞報名。'); if(c.lv<DG_MINLV) return this.logTo(P,`Lv.${DG_MINLV} 才能參加公會試煉。`);
+    if(P.run) return; const team=(P.party?[...P.party.members]:[P]).filter(o=>o.inst&&o.inst.id==='village'&&o.dead<=0&&!o.run&&o.c.lv>=DG_MINLV);
+    const lv=Math.max(...team.map(o=>o.c.lv)), theme=dgTheme(lv), run={rid:this.runSeq++, theme, floor:0, seed:ri(1,999999), t0:Date.now(), pids:new Set(team.map(o=>o.id)), deaths:0, open:false, inst:null, event:null};
+    this.runs.set(run.rid,run); for(const o of team){ o.run=run; if(o!==P) this.sysTo(o,`${P.name} 帶隊進入了公會試煉「${DGN[theme]}」。`); }
+    this.dgNext(run, team); }
+  dgNext(run,team){ const old=run.inst; const movers=team||(old?[...old.players]:[]); run.floor++; run.open=false;
+    const id=dgId(run.theme,run.floor,run.seed), m=buildMap(id), T=MAPDEF[run.theme];
+    const inst={ id, m, def:{name:m.name,tier:T.tier,dungeon:true}, players:new Set(), mobs:new Map(), spawnT:0, bossT:1e9, ev:[], tg:[], loot:new Map(), lootDirty:true, dg:run };
+    this.maps[id]=inst; run.inst=inst; this.dgPopulate(inst,run,Math.max(1,movers.length));
+    for(const o of movers){ o.run=run; const pos=this.freeNear(inst,m.entry.x,m.entry.y); this.enterMap(o,id,pos); }
+    this.dgState(inst); }
+  freeNear(inst,x,y){ const M=inst.m; for(let r=0;r<4;r++) for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){ const X=x+dx,Y=y+dy; if(X>=0&&Y>=0&&X<M.W&&Y<M.H&&!M.blk[Y*M.W+X]&&!M.portals.some(p=>p.x===X&&p.y===Y)) return {x:X,y:Y}; } return {x,y}; }
+  dgPopulate(inst,run,n){ const M=inst.m, T=MAPDEF[run.theme], L=T.mobs;
+    const spots=M.open.map(k=>({x:k%M.W,y:k/M.W|0})).filter(p=>Math.hypot(p.x-M.entry.x,p.y-M.entry.y)>6&&!M.portals.some(q=>q.x===p.x&&q.y===p.y));
+    const take=()=>{ for(let i=0;i<30;i++){ const p=spots[ri(0,spots.length-1)]; if(!this.occupied(inst,p.x,p.y)) return p; } return spots[0]; };
+    if(M.dg.last){ const b=this.spawnMob(inst,T.boss,M.boss.x,M.boss.y); b.hp=b.maxhp=Math.round(MT[T.boss].hp*(.3+.25*n)); b.dgReq=true; b.mechT=6;
+      for(let i=0;i<2+n;i++){ const p=take(); const a=this.spawnMob(inst,pick(L),p.x,p.y); a.dgReq=true; } run.event=null; return; }
+    const count=8+run.floor*2+n*3; for(let i=0;i<count;i++){ const p=take(); const a=this.spawnMob(inst,pick(L),p.x,p.y); a.dgReq=true; if(i<1+run.floor+(n>1?1:0)) this.makeElite(a,3.2); }
+    const ev=pick(['goblin','shrine','chest','chest','elites']); run.event=ev; const room=M.rooms[ri(1,M.rooms.length-2)];
+    if(ev==='goblin'){ const p=this.freeNear(inst,room.x,room.y); this.makeGoblin(inst,this.spawnMob(inst,'goblin',p.x,p.y),T.tier); }
+    if(ev==='shrine'){ inst.shrine={...this.freeNear(inst,room.x,room.y),used:false}; }
+    if(ev==='chest'){ inst.chest={...this.freeNear(inst,room.x,room.y),open:false,mimic:Math.random()<.3}; }
+    if(ev==='elites'){ for(let i=0;i<3;i++){ const p=this.freeNear(inst,room.x+ri(-2,2),room.y+ri(-2,2)); const a=this.spawnMob(inst,pick(L),p.x,p.y); a.dgReq=true; this.makeElite(a,3.2); } } }
+  dgState(inst){ const run=inst.dg, M=inst.m; let left=0; for(const m of inst.mobs.values()) if(m.dgReq) left++;
+    this.mapBroadcast(inst,{t:'dg',on:true,name:DGN[run.theme],theme:run.theme,floor:run.floor,floors:DG_FLOORS,left,open:run.open,el:Date.now()-run.t0,limit:DG_LIMIT*1000,
+      shrine:inst.shrine||null,chest:inst.chest?{x:inst.chest.x,y:inst.chest.y,open:inst.chest.open}:null,event:run.event}); }
+  dgKill(inst,m,best){ const run=inst.dg; if(!m.dgReq) return; let left=0; for(const o of inst.mobs.values()) if(o.dgReq) left++;
+    if(left===0&&!run.open){ run.open=true;
+      if(inst.m.dg.last){ for(const o of inst.players) this.dgReward(o,run); }
+      else this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'公會試煉',msg:`第 ${run.floor} 層清空了！${run.floor===DG_FLOORS-1?'通往最深處':'通往下一層'}的門打開了。`}); }
+    this.dgState(inst); }
+  dgTick(inst,dt){ const run=inst.dg; inst.dgT=(inst.dgT||0)-dt; if(inst.dgT>0) return; inst.dgT=.5;
+    if(!run.open&&Date.now()-run.t0>DG_LIMIT*1000){ for(const o of [...inst.players]){ o.run=null; this.send(o,{t:'dg',on:false}); this.enterMap(o,'village',{x:15,y:19}); this.send(o,{t:'qdone',note:1,n:'公會試煉失敗',r:'時間到了……下次再挑戰吧。'}); } return; }
+    for(const P of inst.players){ if(P.dead>0) continue;
+      const S=inst.shrine; if(S&&!S.used&&cheb(P,S)<=1){ S.used=true; const b=pick(['rage','haste','heal']);
+        if(b==='heal'){ for(const o of inst.players){ o.c.hp=o.stats.maxHP; o.c.mp=o.stats.maxMP; this.me(o); } } else for(const o of inst.players){ o.buff[b]=60; this.ev(inst,'fx',o.id,b==='rage'?'rage':'haste'); }
+        this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'祝福祭壇',msg:b==='heal'?'溫暖的月光灑下，全隊的 HP 和 MP 回滿了！':b==='rage'?'祭壇賜予力量：全隊 60 秒內傷害 +40%！':'祭壇賜予迅捷：全隊 60 秒內攻速大幅提升！'}); this.dgState(inst); }
+      const C=inst.chest; if(C&&!C.open&&cheb(P,C)<=1){ C.open=true;
+        if(C.mimic){ this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'公會試煉',msg:'寶箱張開了嘴……是寶箱怪！牠叫來了一群精英！'}); for(let i=0;i<2+inst.players.size;i++){ const p=this.freeNear(inst,C.x+ri(-2,2),C.y+ri(-2,2)); const a=this.spawnMob(inst,pick(MAPDEF[run.theme].mobs),p.x,p.y); this.makeElite(a,2.6); a.tgt=P.id; } }
+        else { const tier=MAPDEF[run.theme].tier, owners=new Set([...inst.players].map(o=>o.id)), drop=L=>this.dropLoot(inst,C.x,C.y,L,owners,P);
+          drop({k:'ws'}); drop({k:'as'}); drop({k:'big',n:3}); const it=makeItem(randomSlot(),tier); it.q=Math.max(it.q|0,1); it.bon=it.bon||{con:1+(tier>>1)}; drop({it}); for(const o of inst.players){ o.c.gold+=500+tier*tier*300; this.me(o); }
+          this.mapBroadcast(inst,{t:'chat',ch:'sys',from:'公會試煉',msg:`${P.name} 打開了寶箱！`}); }
+        this.dgState(inst); } } }
+  dgReward(P,run){ const c=P.c, d=today(); if(!c.dg||c.dg.day!==d) c.dg={day:d,n:0}; const secs=Math.max(1,Math.round((Date.now()-run.t0)/1000)), tier=MAPDEF[run.theme].tier;
+    c.dgClears=(c.dgClears|0)+1; c.dgBest=c.dgBest||{}; const rec=!c.dgBest[run.theme]||secs<c.dgBest[run.theme]; if(rec) c.dgBest[run.theme]=secs; if(secs<300) c.dgFast=1;
+    const tm=`${Math.floor(secs/60)} 分 ${String(secs%60).padStart(2,'0')} 秒`; let r;
+    if(c.dg.n<DG_DAILY){ c.dg.n++; const e=Math.round(expNeed(c.lv)*.45), g=1200+c.lv*150; this.gainExp(P,e); c.gold+=g; c.inv.ws=(c.inv.ws||0)+1; c.inv.as=(c.inv.as||0)+1; c.inv.big=(c.inv.big||0)+3;
+      const it=makeItem(Math.random()<.4?'w':randomSlot(),Math.min(5,tier+(Math.random()<.25?1:0))); it.q=Math.random()<.35?2:1; it.bon=it.bon||{};
+      if(it.q===2&&Object.keys(it.bon).length<2) it.bon[pick(['str','dex','con','int','wis'])]=(it.bon.str|0)+1+(tier>>1);
+      const leg=Math.random()<.03?makeLegend(Math.random()<.7?'w':'n'):null; let got=itemName(it,c.cls);
+      for(const x of leg?[it,leg]:[it]){ if(c.bag.length<BAGMAX) c.bag.push(x); else this.dropLoot(P.inst,P.x,P.y,{it:x},new Set([P.id]),P); }
+      if(leg){ got+='、【傳說】'+itemBaseName(leg,c.cls); this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`✦ ${P.name} 在公會試煉的寶箱裡找到了傳說裝備！`}); }
+      r=`通關時間 ${tm}${rec?'（新紀錄！）':''}・經驗 +${e}、金幣 +${g}、強化卷軸各 1、${got}・今日 ${c.dg.n}/${DG_DAILY}`; }
+    else r=`通關時間 ${tm}${rec?'（新紀錄！）':''}・今天的試煉獎勵已經領完了（${DG_DAILY}/${DG_DAILY}），明天再來！`;
+    this.send(P,{t:'qdone',n:`公會試煉通關：${DGN[run.theme]}`,r}); this.mapBroadcast(P.inst,{t:'chat',ch:'sys',from:'公會試煉',msg:`${P.name} 通關！傳送門已經打開，可以回村了。`}); P.run=null; this.me(P); }
   // ---------- advancement quest, bounties, achievements ----------
   advqKill(P,m){ const c=P.c,q=c.advq; if(!q||c.adv) return; const M=MENTOR[c.cls];
     if(q.s===1&&M.mobs.includes(m.k)&&Math.random()<ADVQ_RATE){ q.n++; this.logTo(P,`獲得「${M.token}」（${q.n}/${ADVQ_NEED}）`); if(q.n>=ADVQ_NEED){ q.s=2; this.send(P,{t:'qdone',note:1,n:`收齊${M.token}`,r:'最後的試煉：打倒骸骨荒原的白骨巨像'}); } this.me(P); }
@@ -480,6 +558,8 @@ export class World {
       // pick target: current aggro target if valid else nearest player in sight
       let T=m.tgt?this.players.get(m.tgt):null; if(T&&(T.inst!==inst||T.dead>0||cheb(m,T)>(m.boss?10:9))) { T=null; m.tgt=null; }
       if(!T){ let bd=1e9; const sight=m.boss?8:(t.sight||6); for(const P of inst.players){ if(P.dead>0) continue; const d=cheb(m,P); if(d<=sight&&d<bd){bd=d;T=P;} } if(T) m.tgt=T.id; }
+      if(m.flee){ if(this.goblinAI(inst,m,dt)) continue; }
+      if(m.elite&&T&&this.eliteAI(inst,m,T,dt)) continue;
       if(m.boss&&T&&this.bossAI(inst,m,T,dt)) continue;
       if(T){ const d=cheb(m,T);
         if(t.ranged&&d<=t.ranged&&d>1){ if(m.cd<=0){ m.cd=1.6; this.face(m,T.x-m.x,T.y-m.y); this.ev(inst,'a',m.id,T.id,MSHOT[m.k]||'spore'); this.mobHit(m,T); } }
@@ -527,6 +607,7 @@ export class World {
         c.gold-=ADV_COST; c.adv=String(msg.to); P.stats=calcStats(c); c.hp=P.stats.maxHP; c.mp=P.stats.maxMP; this.ev(inst,'l',P.id); this.me(P);
         this.send(P,{t:'qdone',n:`轉職為「${A.n}」`,r:`學會 ${A.sk.map(k=>k.n).join('、')}`});
         return this.broadcast({t:'chat',ch:'sys',from:'系統',msg:`${P.name} 轉職為${A.n}！`}); }
+      case 'dgstart': return this.dgStart(P);
       case 'advstart': { if(!town||c.adv||c.advq) return; if(c.lv<ADV_LV) return this.logTo(P,`Lv.${ADV_LV} 才能接受轉職試煉。`); const M=MENTOR[c.cls];
         c.advq={s:1,n:0}; this.me(P); return this.send(P,{t:'qdone',note:1,n:'接受轉職試煉',r:`收集 ${ADVQ_NEED} 個「${M.token}」（${M.mobs.map(k=>MT[k].n).join('、')}）`}); }
       case 'bclaim': { if(!town) return; this.checkBounty(P); const b=c.bounty.list[msg.i|0]; if(!b||b.p<b.need) return;
@@ -592,6 +673,8 @@ export class World {
   chat(P,msg){ const text=String(msg.msg||'').replace(/[\u0000-\u001f]/g,'').trim().slice(0,120); if(!text) return;
     if(process.env.DEV_CMDS==='1'&&text[0]==='!'){ const [cmd,arg,arg2]=text.slice(1).split(/\s+/),c=P.c;
       if(cmd==='lv'){ c.lv=Math.max(1,Math.min(60,arg|0)); c.pts=0; c.hp=c.mp=99999; this.me(P); }
+      if(cmd==='dgclear'&&P.inst.dg){ for(const m of [...P.inst.mobs.values()]) if(m.dgReq){ m.dmg.set(P.id,1); this.killMob(P.inst,m); } return; }
+      if(cmd==='dgnext'&&P.inst.dg&&P.inst.dg.open&&!P.inst.m.dg.last) return this.dgNext(P.inst.dg);
       if(cmd==='tp'&&MAPDEF[arg]){ const b=this.maps[arg].m.boss; this.enterMap(P,arg,arg2==='boss'&&b?{x:b.x+3,y:b.y+3}:null); }
       if(cmd==='drop'){ const q=arg|0; this.dropLoot(P.inst,P.x+1,P.y+1,q===3?{it:makeLegend('w')}:q?{it:Object.assign(makeItem('h',3),{q,bon:{str:2}})}:{k:'pot'},new Set([P.id]),P); }
       if(cmd==='eclipse'){ if(arg==='off') this.setEclipse(false); else this.setEclipse(true,Date.now()+(+arg||30)*60e3,true); }

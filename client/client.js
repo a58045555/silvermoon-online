@@ -5,7 +5,7 @@
 const maps={};
 function getMap(id){ if(!maps[id]){ const m=buildMap(id); m.mobs=[]; m.corpses=[]; renderGround(m); maps[id]=m; } return maps[id]; }
 const ents=new Map(); // id -> entity (players + mobs) in current map
-let myTargetId=null, pendingAct=null, auto=false, armed=null, bagSel=null, chatCh='map', lastTrade=null, logs=[];
+let DG=null; let myTargetId=null, pendingAct=null, auto=false, armed=null, bagSel=null, chatCh='map', lastTrade=null, logs=[];
 function myTarget(){ return myTargetId?ents.get(myTargetId)||null:null; }
 const CLSI={knight:0,ranger:1,mage:2,darkelf:3};
 const INVI={pot:57,big:58,blue:59,ret:60,ws:61,as:62};
@@ -68,6 +68,7 @@ function onMsg(m){
     case 'who': openPanel('who',m.list); return;
     case 'quest': if(!m.silent) setTimeout(()=>openPanel('story',{title:m.n,text:m.story}),600); return;
     case 'qdone': onQuestDone(m); return;
+    case 'dg': if(!m.on){ DG=null; return; } { const wasOpen=DG&&DG.open&&DG.floor===m.floor; DG=Object.assign(m,{base:performance.now()-m.el}); if(m.open&&!wasOpen){ SFX.ok(); if(cur) banner={t:2.5,a:m.floor>=m.floors?'試煉完成':'門打開了！',b:m.floor>=m.floors?'走進傳送門回到晨霧村':'走進發光的門前往下一層'}; } } return;
     case 'event': if(m.k!=='eclipse') return onWorldEvent(m); eclipse=m.on?{end:m.end-Date.now()+performance.now()}:null; if(m.on){ banner={t:4,a:'✦ 月蝕之夜 ✦',b:'怪物加倍・經驗 ×2・稀有掉寶提高'}; SFX.legend(); doShake(6,.5); } return;
     case 'ench': SFX[m.ok?'ok':'boom'](); if(curPanel==='smith') openPanel('smith',{c:m.ok?'ok':'boom',t:m.msg}); addLog(m.msg); return;
   }
@@ -264,6 +265,9 @@ function drawTracker(){ if(!ME) return; const q=QUESTS[ME.mq],maxW=Math.min(220,
   else if(q){ rows.push(['◆ '+q.n,'#e8c46a']); for(const l of wrapText(q.d+(q.type!=='talk'?`（${ME.mqp}/${q.need}）`:''),maxW)) rows.push([l,'#ece2c8']); }
   else rows.push(['◆ 主線完成','#e8c46a']);
   if(ME.daily&&!hideTrack){ const left=ME.daily.list.filter(x=>!x.done); rows.push([left.length?`每日 ${3-left.length}/3・${left[0].d}（${left[0].p}/${left[0].n}）`:'每日任務完成 ✓',left.length?'#9fc4e0':'#7fe08a']); }
+  if(DG){ const sec=Math.max(0,(DG.limit-(performance.now()-DG.base))/1000), tt=`${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`;
+    rows.unshift([DG.open?(DG.floor>=DG.floors?'✓ 試煉完成・走進傳送門回村':'✓ 門已打開・走進發光的門'):`剩下 ${DG.left} 隻怪物${DG.event==='goblin'?'・有寶藏哥布林！':DG.event==='shrine'&&!(DG.shrine&&DG.shrine.used)?'・找到祝福祭壇':DG.event==='chest'&&!(DG.chest&&DG.chest.open)?'・這層有寶箱':''}`,DG.open?'#7fe08a':'#ece2c8']);
+    rows.unshift([`⚔ ${DG.name} ${DG.floor>=DG.floors?'最深處':DG.floor+'/'+(DG.floors-1)+' 層'}・⏱ ${tt}`,sec<60?'#ff7a6a':'#ffb070']); }
   if(eclipse){ const left=Math.max(0,(eclipse.end-performance.now())/1000); if(left<=0) eclipse=null; else rows.unshift([`✦ 月蝕之夜 ${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')}・經驗 ×2`,'#ff7a8a']); }
   if(invasion){ const left=Math.max(0,(invasion.end-performance.now())/1000); rows.unshift([`⚔ 教團入侵・泉水耐久 ${invasion.hp}/100・${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')}`,invasion.hp>40?'#ffb070':'#ff5a4a']); }
   if(wboss) rows.unshift(['🔥 卡爾薩殘火甦醒中（熔岩洞窟）','#ff9a3c']);
@@ -588,7 +592,11 @@ function panelHTML(k,arg){ const c=ME; if(!c) return '';
     return `<p>${L[0]}</p><p class="ds">${L[1]}</p>`+(mine?advHTML(c):`<p class="ds">你的導師是${MENTOR[c.cls].who}。</p>`); }
   if(k==='guild'){ const B=c.bounty; if(!B) return '<p>米亞：「稍等，我在整理委託單……」</p>';
     const rows=B.list.map((b,i)=>{ const done=b.p>=b.need; return `<div class="gear"><div class="gname">${b.boss?'【Boss】':''}${MAPDEF[b.map].name}・${MT[b.k].n} ×${b.need}</div><div class="pbar"><i style="width:${Math.min(100,b.p/b.need*100)}%"></i></div><div class="row2" style="margin-top:6px"><span class="ds">${Math.min(b.p,b.need)}/${b.need}${b.boss?'・必得強化卷軸':'・30% 送強化卷軸'}</span>${done?`<button class="btn on" data-bclaim="${i}" ${cur.id==='village'?'':'disabled'}>領取報酬</button>`:`<button class="btn ${armed==='rr'+i?'hot':''}" data-breroll="${i}">${armed==='rr'+i?'確定（200 金幣）':'換一張'}</button>`}</div></div>`; }).join('');
-    return `<p>米亞：「歡迎來到冒險者公會晨霧村分部！委託會依你的等級挑，打完回來找我領錢～」</p>${rows||'<p class="ds">今天的委託都做完了，明天再來喔！</p>'}<p class="ds">今日完成 ${B.done}/${BOUNTY_DAY_MAX}・累計 ${c.bountyDone|0} 張・每天台灣時間午夜刷新</p>`; }
+    const dgN=ME.dg&&ME.dg.day===todayTW()?ME.dg.n:0, th=dgTheme(c.lv), best=ME.dgBest&&ME.dgBest[th], party=P&&[...players.values()].filter(e=>e!==P&&e.party).length;
+    const dgB=`<div class="sect">公會試煉（副本）</div><div class="gear"><div class="gname">${DGN[th]}</div><div class="ds">3 層怪物＋最深處的守護者。每層有隨機事件：寶藏哥布林、祝福祭壇、寶箱（小心寶箱怪）、精英怪群。限時 15 分鐘，倒下會在該層入口復活。</div>
+      <div class="ds">今日獎勵 ${dgN}/${DG_DAILY}・${best?`最佳紀錄 ${Math.floor(best/60)}:${String(best%60).padStart(2,'0')}`:'還沒有紀錄'}${party?`・隊友會一起進去（要在村子裡）`:''}</div>
+      <button class="btn wide on" data-act="dgstart" ${c.lv<DG_MINLV||cur.id!=='village'?'disabled':''}>${c.lv<DG_MINLV?`Lv.${DG_MINLV} 才能參加`:'進入試煉'}</button></div>`;
+    return `<p>米亞：「歡迎來到冒險者公會晨霧村分部！委託會依你的等級挑，打完回來找我領錢～」</p>${dgB}<div class="sect">今日委託</div>${rows||'<p class="ds">今天的委託都做完了，明天再來喔！</p>'}<p class="ds">今日完成 ${B.done}/${BOUNTY_DAY_MAX}・累計 ${c.bountyDone|0} 張・每天台灣時間午夜刷新</p>`; }
   if(k==='ach'){ const got=ACH.filter(a=>c.ach[a.id]).length;
     return `<p class="ds">已達成 ${got}/${ACH.length}。點「戴上」把稱號顯示在名字上方。</p>`+ACH.map(a=>{ const ok=c.ach[a.id], v=Math.min(achValue(c,a.k),a.v);
       return `<div class="row"><div class="info"><div class="nm" style="color:${ok?'#e8c46a':'var(--dim)'}">${ok?'★':'☆'} ${a.t}</div><div class="ds">${a.d}${a.g?`・${a.g.toLocaleString()} 金幣`:''}${ok?'':`・${v.toLocaleString()}/${a.v.toLocaleString()}`}</div></div>${ok?`<button class="btn ${c.title===a.id?'on':''}" data-title="${c.title===a.id?'':a.id}">${c.title===a.id?'卸下':'戴上'}</button>`:''}</div>`; }).join(''); }
@@ -638,6 +646,7 @@ $('#pBody').addEventListener('click',e=>{ const b=e.target.closest('button'); if
   if(D.lock!=null) return send({t:'lock',i:+D.lock});
   if(D.act==='qtalk') return send({t:'qtalk'});
   if(D.act==='advstart') return send({t:'advstart'});
+  if(D.act==='dgstart'){ closePanel(); return send({t:'dgstart'}); }
   if(D.bclaim!=null) return send({t:'bclaim',i:+D.bclaim});
   if(D.breroll!=null){ if(armed!=='rr'+D.breroll){ armed='rr'+D.breroll; return openPanel('guild'); } armed=null; return send({t:'breroll',i:+D.breroll}); }
   if(D.title!=null) return send({t:'title',id:D.title});
@@ -713,7 +722,7 @@ function frame(t){ const dt=Math.min(.05,(t-last)/1000); last=t; now+=dt;
 resize();
 loadAssets().then(()=>{ connect(); requestAnimationFrame(frame); });
 // debug / test handle
-window.SM={send,toggleAuto,openPanel,get ME(){return ME;},get players(){return players;},get cur(){return cur;},get P(){return P;},get tgs(){return tgs.length;},get target(){const t=myTarget();return t?t.k:null;},get dbg(){return {auto,joyHold,mobs:cur.mobs.map(m=>m.k).join(','),AS,P:[P.x,P.y]};},get loot(){return loot;}};
+window.SM={get DG(){return DG;},send,toggleAuto,openPanel,get ME(){return ME;},get players(){return players;},get cur(){return cur;},get P(){return P;},get tgs(){return tgs.length;},get target(){const t=myTarget();return t?t.k:null;},get dbg(){return {auto,joyHold,mobs:cur.mobs.map(m=>m.k).join(','),AS,P:[P.x,P.y]};},get loot(){return loot;}};
 
 function npcHint(o){ const c=ME; if(!c) return false; const a=o.act;
   const advReady=!c.adv&&c.lv>=ADV_LV&&(!c.advq||c.advq.s===3);
@@ -721,3 +730,5 @@ function npcHint(o){ const c=ME; if(!c) return false; const a=o.act;
   if(a&&a.startsWith('mentor:')) return MENTOR[c.cls].npc===a.slice(7)&&advReady;
   if(a==='guild') return !!(c.bounty&&c.bounty.list.some(b=>b.p>=b.need));
   return false; }
+
+function todayTW(){ return new Date(Date.now()+8*3600e3).toISOString().slice(0,10); }

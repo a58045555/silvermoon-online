@@ -164,7 +164,34 @@ function buildWild(id){ const m=newMap(id),d=m.def,W=m.W,H=m.H,R=rng(d.seed),idx
   if(id==='cave')for(let k=0;k<W*H;k++)if(m.g[k]==='l'&&R()<.25)m.lights.push({x:k%W+.5,y:(k/W|0)+.5,r:2.4,c:'255,120,40'});
   return finish(m); }
 function finish(m){ m.open=[]; for(let k=0;k<m.W*m.H;k++)if(!m.blk[k])m.open.push(k); return m; }
-export function buildMap(id){ return id==='village'?buildVillage():buildWild(id); }
+export function buildMap(id){ return id.startsWith('dg_')?buildDungeon(id):id==='village'?buildVillage():buildWild(id); }
+// ---------- dungeons (公會試煉): 3 floors of rooms + a boss arena, layout fully determined by the id ----------
+export const DG_FLOORS = 4, DG_DAILY = 3, DG_LIMIT = 900, DG_MINLV = 5;
+export const DGN = { forest:'哭泣森林地穴', waste:'荒原墓窟', cave:'熔岩深淵', snow:'冰晶迷宮', tower:'月之塔書庫' };
+export const dgTheme = lv=>lv<12?'forest':lv<20?'waste':lv<28?'cave':lv<38?'snow':'tower';
+export const dgId = (theme,floor,seed)=>`dg_${theme}_${floor}_${seed}`;
+function buildDungeon(id){ const [,theme,fl,sd]=id.split('_'), floor=+fl, seed=+sd, T=MAPDEF[theme], last=floor>=DG_FLOORS;
+  const W=last?24:32, H=last?22:26, R=rng(seed*7+floor), idx=(x,y)=>y*W+x;
+  const name=`${DGN[theme]}・${last?'最深處':'第 '+floor+' 層'}`;
+  const m={ id:theme, dgId:id, dg:{theme,floor,last}, name, tip:last?'打倒守護者！':'消滅所有怪物，打開通往下一層的門', W, H, dark:Math.max(.2,T.dark),
+    def:Object.assign({},T,{seed:seed%100000+floor,name,prev:null,next:null}), g:new Array(W*H).fill(T.base), blk:new Uint8Array(W*H).fill(1), objs:[], npcs:[], portals:[], lights:[] };
+  const open=(x,y,ch)=>{ if(x<2||y<2||x>=W-2||y>=H-2) return; m.blk[idx(x,y)]=0; if(ch) m.g[idx(x,y)]=ch; };
+  const blob=(cx,cy,rx,ry,ch)=>{ for(let y=cy-ry;y<=cy+ry;y++) for(let x=cx-rx;x<=cx+rx;x++) if(((x-cx)/(rx+.5))**2+((y-cy)/(ry+.5))**2<=1) open(x,y,ch); };
+  const hall=(a,b)=>{ let x=a.x,y=a.y; const hz=R()<.5; const step=(nx,ny)=>{ x=nx; y=ny; for(const [dx,dy] of [[0,0],[1,0],[0,1],[1,1]]) open(x+dx,y+dy,T.trail); };
+    if(hz){ while(x!==b.x) step(x+Math.sign(b.x-x),y); while(y!==b.y) step(x,y+Math.sign(b.y-y)); } else { while(y!==b.y) step(x,y+Math.sign(b.y-y)); while(x!==b.x) step(x+Math.sign(b.x-x),y); } };
+  const rooms=[];
+  if(last){ const c={x:12,y:11}; blob(c.x,c.y,8,7); rooms.push(c); m.entry={x:5,y:15}; m.boss={x:c.x+1,y:c.y-1}; m.exit={x:6,y:16}; open(5,15); open(6,16);
+    m.portals.push({x:m.exit.x,y:m.exit.y,to:'village',label:'回到晨霧村',lock:1}); }
+  else { const n=5; for(let i=0;i<n;i++){ const f=i/(n-1); rooms.push({x:Math.round(5+f*(W-11)+(R()-.5)*3), y:Math.round(i%2?H-8+(R()-.5)*2:7+(R()-.5)*2)}); }
+    rooms.forEach((c,i)=>blob(c.x,c.y,3+Math.floor(R()*2),3+Math.floor(R()*2),i===0||i===n-1?T.trail:null)); for(let i=1;i<n;i++) hall(rooms[i-1],rooms[i]);
+    m.entry={x:rooms[0].x,y:rooms[0].y}; m.exit={x:rooms[n-1].x,y:rooms[n-1].y}; m.boss=m.exit;
+    m.portals.push({x:m.exit.x,y:m.exit.y,to:'next',label:floor===DG_FLOORS-1?'通往最深處':'通往下一層',lock:1}); }
+  m.rooms=rooms; m.spawn={x:m.entry.x,y:m.entry.y};
+  // walls: an object on every blocked tile next to the open area; deeper rock stays bare
+  const NR=theme==='cave'||theme==='waste'?2:1; const near=(x,y)=>{ for(let dy=-NR;dy<=NR;dy++) for(let dx=-NR;dx<=NR;dx++){ const X=x+dx,Y=y+dy; if(X>=0&&Y>=0&&X<W&&Y<H&&!m.blk[idx(X,Y)]) return true; } return false; };
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++) if(m.blk[idx(x,y)]&&near(x,y)){ const o={t:theme==='tower'?(R()<.3?'pillar':'rubble'):theme==='snow'&&R()<.35?'irock':BORDER[theme],x,y,w:1,h:1,v:Math.floor(R()*3)}; m.objs.push(o); }
+  m.lights.push({x:m.entry.x+.5,y:m.entry.y+.5,r:3,c:'255,220,160'},{x:m.exit.x+.5,y:m.exit.y+.5,r:2.6,c:'190,140,255'});
+  return finish(m); }
 // where you appear when arriving through a portal from map `from`
 export function arrivalPoint(m,from){
   if(m.id==='village')return{x:15,y:19};
@@ -398,6 +425,9 @@ export const ACH = [
   {id:'inv',t:'守村英雄',d:'守住晨霧村 3 次',k:'invWon',v:3,g:8000},
   {id:'wb',t:'焚月者',d:'擊倒世界 Boss 卡爾薩殘火',k:'wbKills',v:1,g:20000},
   {id:'b20',t:'公會之星',d:'完成 20 張公會委託',k:'bountyDone',v:20,g:8000},
+  {id:'dg1',t:'試煉新人',d:'第一次通關公會試煉',k:'dgClears',v:1,g:2000},
+  {id:'dg30',t:'地城常客',d:'通關公會試煉 30 次',k:'dgClears',v:30,g:20000},
+  {id:'dgfast',t:'速攻者',d:'5 分鐘內通關公會試煉',k:'dgFast',v:1,g:10000},
   {id:'rich',t:'富商',d:'身上同時有 100 萬金幣',k:'gold',v:1000000,g:0}
 ];
 export function achValue(c,k){ if(k==='lv') return c.lv; if(k==='kills') return c.kills|0; if(k==='mq') return c.mq|0; if(k==='adv') return c.adv?1:0; if(k==='gold') return c.gold|0;
